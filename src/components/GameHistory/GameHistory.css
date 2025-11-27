@@ -107,11 +107,11 @@
 }
 
 .roadmap-item.outlined.red {
-  border-color: #ff4444;
+  border-color: #CC0000;
 }
 
 .roadmap-item.outlined.yellow {
-  border-color: #ffd700;
+  border-color: #1A1A7A;
 }
 
 .roadmap-item.outlined.green {
@@ -125,11 +125,11 @@
 }
 
 .roadmap-item.solid.red {
-  background: #ff4444;
+  background: #CC0000;
 }
 
 .roadmap-item.solid.yellow {
-  background: #ffd700;
+  background: #1A1A7A;
 }
 
 .roadmap-item.solid.green {
@@ -145,11 +145,11 @@
 }
 
 .roadmap-item.diagonal.red {
-  background: #ff4444;
+  background: #CC0000;
 }
 
 .roadmap-item.diagonal.yellow {
-  background: #ffd700;
+  background: #1A1A7A;
 }
 
 /* Diagonal Mark (for ties) */
