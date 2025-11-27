@@ -1,35 +1,67 @@
-import { useMemo } from 'react'
+import React, { useState } from 'react'
 import { useGameStore } from '../../store/gameStore'
-import './SelectedChipDisplay.css'
+import './Chips.css'
 
-/**
- * SelectedChipDisplay component shows a large display of the currently selected chip
- * This is used in the controls bar to show the active chip value
- */
-const SelectedChipDisplay: React.FC = () => {
-  const { selectedChip } = useGameStore()
+const CHIP_VALUES = [10, 20, 50, 100, 200, 500, 1000, 5000]
 
-  /**
-   * Gets the CSS color class for a chip based on its value
-   */
-  const getChipColor = useMemo(() => {
-    if (selectedChip >= 50000) return 'chip-orange'
-    if (selectedChip >= 10000) return 'chip-teal'
-    if (selectedChip >= 5000) return 'chip-gold'
-    if (selectedChip >= 1000) return 'chip-blue'
-    if (selectedChip >= 500) return 'chip-magenta'
-    // For chip value 20 (special styling to match image)
-    return 'chip-selected-display'
-  }, [selectedChip])
+const getChipSVG = (value: number) => `/${value}.svg`
+
+const Chips: React.FC = () => {
+  const { selectedChip, setSelectedChip } = useGameStore()
+  const [expanded, setExpanded] = useState(false) // toggle chip grid
+
+  const handleToggle = () => setExpanded((prev) => !prev)
+
+  const handleSelect = (value: number) => {
+    setSelectedChip(value)
+    setExpanded(false) // collapse after selection
+  }
 
   return (
-    <div className={`selected-chip-large ${getChipColor}`}>
-      <div className="selected-chip-inner">
-        <span className="selected-chip-value">{selectedChip}</span>
-      </div>
+    <div className="chips-container">
+      {!expanded ? (
+        // Only show selected chip
+        <button
+          className="chip selected"
+          onClick={handleToggle}
+          aria-label={`Selected chip ${selectedChip || 10}`}
+          type="button"
+        >
+          <div className="chip-inner">
+            <img
+              src={getChipSVG(selectedChip || 10)}
+              alt={`Chip ${selectedChip || 10}`}
+              className="chip-image w-[40px] h-[40px]"
+            />
+          </div>
+        </button>
+      ) : (
+        // Expanded grid
+        <div className="chips-grid">
+          {CHIP_VALUES.map((value) => {
+            const isSelected = selectedChip === value
+            return (
+              <button
+                key={value}
+                className={`chip ${isSelected ? 'selected' : ''}`}
+                onClick={() => handleSelect(value)}
+                aria-label={`Select chip ${value}`}
+                type="button"
+              >
+                <div className="chip-inner">
+                  <img
+                    src={getChipSVG(value)}
+                    alt={`Chip ${value}`}
+                    className="chip-image w-[40px] h-[40px]"
+                  />
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
 
-export default SelectedChipDisplay
-
+export default Chips

@@ -79,7 +79,7 @@
 .control-btn-circle.clear,
 .control-btn-circle.double {
   border: none;
-  background: rgba(60, 60, 60, 0.9);
+  background: rgba(53, 50, 50, 0.9);
   color: #fff;
 }
 
@@ -90,7 +90,7 @@
 }
 
 .control-btn-circle:disabled {
-  opacity: 0.5;
+  opacity: 1;
   cursor: not-allowed;
 }
 
