@@ -298,7 +298,7 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
             <button className="filter-btn yellow-filter" aria-label="Filter yellow">
               <span className="stat-circle white">W</span>
               <span className="filter-icon outlined yellow"></span>
-              <span className="filter-icon solid yellow"></span>              
+              <span className="filter-icon "></span>              
               <span className="filter-icon diagonal yellow"></span>
             </button>
           </div>

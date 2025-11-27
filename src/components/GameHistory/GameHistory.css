@@ -216,7 +216,7 @@
 }
 
 .stat-circle.yellow {
-  background: #ffd700;
+  background: #400bd1;
 }
 
 .stat-circle.green {
@@ -250,11 +250,11 @@
 }
 
 .filter-btn.red-filter {
-  background: #ff4444;
+  background: #CC0000;
 }
 
 .filter-btn.yellow-filter {
-  background: #ffd700;
+  background: #1A1A7A;
 }
 
 .filter-btn:hover {

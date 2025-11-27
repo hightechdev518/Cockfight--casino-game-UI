@@ -129,8 +129,7 @@ const BettingInterface: React.FC = () => {
             <span className="bet-label-large">Meron</span>
             <span className="bet-odds">1:1</span>
             <div className="bet-stats">
-              <span className="bet-percentage">{getBetPercentage('dragon')}%</span>
-              <span className="bet-icon">👤</span>
+              <span className="bet-percentage">{getBetPercentage('dragon')}</span>
               <span className="bet-amount-display">${getBetAmount('dragon')}</span>
             </div>
           </button>
@@ -141,8 +140,7 @@ const BettingInterface: React.FC = () => {
             <span className="bet-label-large">Draw</span>
             <span className="bet-odds">1:8</span>
             <div className="bet-stats">
-              <span className="bet-percentage">{getBetPercentage('tie')}%</span>
-              <span className="bet-icon">👤</span>
+              <span className="bet-percentage">{getBetPercentage('tie')}</span>
               <span className="bet-amount-display">${getBetAmount('tie')}</span>
             </div>
           </button>
@@ -153,8 +151,7 @@ const BettingInterface: React.FC = () => {
             <span className="bet-label-large">Wala</span>
             <span className="bet-odds">1:1</span>
             <div className="bet-stats">
-              <span className="bet-percentage">{getBetPercentage('tiger')}%</span>
-              <span className="bet-icon">👤</span>
+              <span className="bet-percentage">{getBetPercentage('tiger')}</span>
               <span className="bet-amount-display">${getBetAmount('tiger')}</span>
             </div>
           </button>

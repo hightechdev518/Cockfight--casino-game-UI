@@ -69,30 +69,30 @@
 /* Main Bet Styles */
 .main-bet {
   font-size: 0.95rem;
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  border: 2px solid #FFD700;
   padding: 0.75rem 0.6rem;
   min-height: 140px; /* Balanced height for visibility */
 }
 
 .main-bet.dragon {
-  background: linear-gradient(135deg, rgba(220, 20, 60, 0.4) 0%, rgba(139, 0, 0, 0.4) 100%);
-  color: #fff;
+  background: #CC0000 ;
+  color: #C0C0C0;
 }
 
 .main-bet.tiger {
-  background: linear-gradient(135deg, rgba(255, 152, 0, 0.4) 0%, rgba(255, 193, 7, 0.4) 100%);
-  color: #fff;
+  background: #1A1A7A;
+  color: #C0C0C0;
 }
 
 .main-bet.tie {
-  background: linear-gradient(135deg, rgba(0, 200, 100, 0.4) 0%, rgba(0, 255, 136, 0.4) 100%);
-  color: #fff;
+  background: #007A3D;
+  color: #C0C0C0;
 }
 
 .bet-label-large {
-  font-size: 1.6rem;
+  font-size: 3rem;
   font-weight: 900;
-  margin-bottom: 0.15rem;
+  margin-bottom: 0.2rem;
 }
 
 .bet-stats {
@@ -106,6 +106,7 @@
 
 .bet-percentage {
   font-weight: bold;
+  font-size: 1.5rem;
 }
 
 .bet-icon {
@@ -114,6 +115,7 @@
 
 .bet-amount-display {
   font-weight: bold;
+  font-size: 2rem;
 }
 
 /* Side Bet Styles */
@@ -311,7 +313,7 @@
   }
   
   .bet-label-large {
-    font-size: 1.1rem;
+    font-size: 1.5rem;
   }
   
   .bet-stats {
@@ -333,6 +335,6 @@
   }
   
   .bet-odds {
-    font-size: 0.55rem;
+    font-size: 1.5rem;
   }
 }
