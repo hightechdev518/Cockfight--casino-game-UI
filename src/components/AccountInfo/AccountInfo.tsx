@@ -30,9 +30,6 @@ const AccountInfo: React.FC = () => {
   /**
    * Handles refresh button click
    */
-  const handleRefresh = useCallback(() => {
-    // Refresh logic will be implemented when backend is available
-  }, [])
 
   return (
     <div className="account-info">
