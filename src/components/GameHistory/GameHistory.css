@@ -1,0 +1,595 @@
+.game-history {
+  background: #e0e0e0;
+  border-radius: 6px;
+  padding: 0.6rem;
+  min-height: fit-content;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  /* Allow content to expand */
+  overscroll-behavior: none;
+}
+
+/* Override for simple variant to maintain fixed height */
+.game-history:not(.detailed) {
+  height: 100%;
+  overflow: hidden;
+}
+
+.game-history.detailed {
+  overflow: hidden; /* Prevent page scrolling */
+  overscroll-behavior: none;
+  background: #e0e0e0;
+  position: relative;
+  height: 280px; /* Match App.css - balanced */
+  max-height: 280px;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  /* Ensure status bar is visible */
+  min-height: 280px;
+}
+
+/* Roadmap Styles */
+.game-history.roadmap {
+  padding: 0;
+  background: #e0e0e0;
+}
+
+.roadmap-container {
+  position: relative;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: auto;
+  background-image: 
+    radial-gradient(circle, #999 1px, transparent 1px);
+  background-size: 20px 20px;
+  background-position: 0 0;
+  min-height: 0;
+  max-height: calc(280px - 60px);
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  /* Allow horizontal scrolling for roadmap */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.3) rgba(0, 0, 0, 0.1);
+  -webkit-overflow-scrolling: touch;
+}
+
+.roadmap-grid {
+  display: grid;
+  grid-auto-rows: 24px;
+  gap: 3px;
+  padding: 1rem;
+  width: fit-content;
+  min-width: 100%;
+  height: fit-content;
+  overflow: visible;
+  align-content: start;
+  position: relative;
+}
+
+/* Scrollbar styles for roadmap container */
+.roadmap-container::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.roadmap-container::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.roadmap-container::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.roadmap-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+/* Scrollbar styles removed - no scrolling needed */
+
+.roadmap-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+}
+
+/* Outlined Circles (Hollow) */
+.roadmap-item.outlined {
+  border-radius: 50%;
+  border-width: 2px;
+  border-style: solid;
+  background: transparent;
+}
+
+.roadmap-item.outlined.red {
+  border-color: #ff4444;
+}
+
+.roadmap-item.outlined.yellow {
+  border-color: #ffd700;
+}
+
+.roadmap-item.outlined.green {
+  border-color: #00cc66;
+}
+
+/* Solid Circles */
+.roadmap-item.solid {
+  border-radius: 50%;
+  border: none;
+}
+
+.roadmap-item.solid.red {
+  background: #ff4444;
+}
+
+.roadmap-item.solid.yellow {
+  background: #ffd700;
+}
+
+.roadmap-item.solid.green {
+  background: #00cc66;
+}
+
+/* Diagonal Lines */
+.roadmap-item.diagonal {
+  width: 100%;
+  height: 2px;
+  transform: rotate(45deg);
+  transform-origin: center;
+}
+
+.roadmap-item.diagonal.red {
+  background: #ff4444;
+}
+
+.roadmap-item.diagonal.yellow {
+  background: #ffd700;
+}
+
+/* Diagonal Mark (for ties) */
+.diagonal-mark {
+  position: absolute;
+  width: 60%;
+  height: 2px;
+  background: #00cc66;
+  transform: rotate(45deg);
+  transform-origin: center;
+  z-index: 1;
+}
+
+/* Scroll Button removed - no scrolling needed */
+
+/* Bottom Status Bar */
+.roadmap-status-bar {  
+  padding: 0.6rem 0.75rem;
+  display: flex !important; /* Ensure it's always visible */
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+  border-top: 2px solid rgba(0, 0, 0, 0.1);
+  background: #e0e0e0;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 50px; /* Ensure adequate height */
+  position: relative;
+  z-index: 10; /* Ensure it's above other content */
+}
+
+.status-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.round-number {
+  font-weight: bold;
+  font-size: 0.85rem;  
+  color: #000;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.stat-circle {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: bold;
+  color: #fff;
+}
+
+.stat-circle.red {
+  background: #ff4444;
+}
+
+.stat-circle.yellow {
+  background: #ffd700;
+}
+
+.stat-circle.green {
+  background: #00cc66;
+}
+
+.stat-value {
+  font-size: 0.85rem;
+  font-weight: bold;
+  color: #000;
+}
+
+.status-right {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.filter-btn {
+  padding: 0.5rem 0.7rem;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  transition: opacity 0.2s;
+  min-height: 44px; /* Better touch target */
+  /* Mobile touch optimizations */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.filter-btn.red-filter {
+  background: #ff4444;
+}
+
+.filter-btn.yellow-filter {
+  background: #ffd700;
+}
+
+.filter-btn:hover {
+  opacity: 0.8;
+}
+
+.filter-icon {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.filter-icon.outlined {
+  border: 1px solid #cf2b2b;
+  background: transparent;
+}
+
+.filter-icon.solid {
+  background: #cf2b2b;
+}
+
+.filter-icon.diagonal {
+  width: 10px;
+  height: 2px;
+  border-radius: 0;
+  transform: rotate(-45deg);
+  background: #cf2b2b;
+}
+
+.filter-btn.red-filter .filter-icon {
+  color: #fff;
+}
+
+.filter-btn.yellow-filter .filter-icon {
+  color: #fff;
+}
+
+.history-header-controls {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.5rem;
+  flex-shrink: 0;
+}
+
+.auto-submit-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.toggle-label {
+  font-size: 0.8rem;
+  color: #333;
+  font-weight: 500;
+}
+
+.toggle-switch {
+  position: relative;
+  width: 70px;
+  height: 28px;
+  background: #a0a0a0;
+  border-radius: 14px;
+  border: none;
+  cursor: pointer;
+  padding: 3px;
+  display: flex;
+  align-items: center;
+  transition: background 0.3s ease;
+}
+
+.toggle-switch.on {
+  background: #4caf50;
+}
+
+.toggle-switch.off {
+  background: #a0a0a0;
+}
+
+.toggle-slider {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  background: #fff;
+  border-radius: 11px;
+  transition: transform 0.3s ease;
+  left: 3px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toggle-switch.on .toggle-slider {
+  transform: translateX(42px);
+}
+
+.toggle-text {
+  font-size: 0.65rem;
+  font-weight: bold;
+  color: #666;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.toggle-switch.on .toggle-text {
+  color: #fff;
+}
+
+.history-header {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.15rem;
+  margin-bottom: 0.15rem;
+  font-size: 0.65rem;
+  color: #b8b8b8;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.history-header .dragon-stats {
+  color: #ff4444;
+}
+
+.history-header .tiger-stats {
+  color: #ffd700;
+}
+
+.history-header .tie-stats {
+  color: #00cc66;
+}
+
+.history-grid {
+  display: grid;
+  gap: 0.3rem;
+  flex: 1;
+  min-height: 0;
+  align-content: start;
+}
+
+/* Simple grid - no scrolling */
+.simple-grid {
+  overflow: hidden;
+}
+
+/* Detailed grid - allow scrolling */
+.detailed-grid {
+  grid-template-columns: repeat(4, 1fr);
+  grid-auto-rows: minmax(40px, auto);
+  gap: 0.25rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  /* Make scrollbar visible */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.3) rgba(0, 0, 0, 0.1);
+  /* Ensure content can overflow */
+  max-height: 100%;
+}
+
+/* Webkit scrollbar styling */
+.detailed-grid::-webkit-scrollbar {
+  width: 8px;
+}
+
+.detailed-grid::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+}
+
+.detailed-grid::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+}
+
+.detailed-grid::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+
+.history-item {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  font-weight: 900;
+  color: #fff;
+  border: 2px solid rgba(0, 0, 0, 0.15);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  /* Mobile touch optimizations */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.history-item:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.history-item.red {
+  background: #ff4444;
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+.history-item.yellow {
+  background: #ffd700;
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+.history-item.green {
+  background: #00cc66;
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+.history-item.empty {
+  background: transparent;
+  border: none;
+  cursor: default;
+  position: relative;
+  box-shadow: none;
+}
+
+.history-item.empty::before {
+  content: '•';
+  color: #b0b0b0;
+  font-size: 0.4rem;
+  position: absolute;
+  opacity: 0.6;
+}
+
+/* Mobile Responsive Styles */
+@media (max-width: 1023px) {
+  .game-history {
+    padding: 0.6rem;
+  }
+  
+  .history-header-controls {
+    margin-bottom: 0.5rem;
+  }
+  
+  .toggle-switch {
+    width: 64px; /* Slightly larger */
+    height: 28px; /* Better touch target */
+  }
+  
+  .toggle-slider {
+    width: 24px;
+    height: 24px;
+  }
+  
+  .toggle-switch.on .toggle-slider {
+    transform: translateX(36px);
+  }
+  
+  .toggle-label {
+    font-size: 0.75rem; /* More readable */
+  }
+  
+  .simple-grid {
+    grid-template-columns: repeat(8, 1fr);
+    gap: 0.25rem; /* Better spacing */
+  }
+  
+  .detailed-grid {
+    grid-template-columns: repeat(6, 1fr);
+    gap: 0.25rem; /* Better spacing */
+    /* Ensure scrollbar is visible on mobile */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.4) rgba(0, 0, 0, 0.2);
+  }
+  
+  .detailed-grid::-webkit-scrollbar {
+    width: 8px; /* Slightly wider for easier interaction */
+  }
+  
+  .detailed-grid::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.5); /* More visible */
+  }
+  
+  .history-item {
+    font-size: 0.9rem; /* More readable */
+    min-height: 32px; /* Better touch target */
+  }
+  
+  .history-header {
+    font-size: 0.65rem;
+    gap: 0.15rem;
+    margin-bottom: 0.15rem;
+  }
+  
+  .roadmap-status-bar {
+    padding: 0.5rem 0.6rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  
+  .status-left {
+    gap: 0.5rem;
+  }
+  
+  .stat-item {
+    gap: 0.25rem;
+  }
+  
+  .stat-circle {
+    width: 22px;
+    height: 22px;
+    font-size: 0.75rem;
+  }
+  
+  .stat-value {
+    font-size: 0.9rem;
+  }
+  
+  .filter-btn {
+    padding: 0.4rem 0.6rem;
+    min-height: 40px;
+  }
+}
+
+@media (max-width: 768px) {
+  .simple-grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+  
+  .detailed-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  
+  .history-item {
+    font-size: 0.75rem;
+  }
+}

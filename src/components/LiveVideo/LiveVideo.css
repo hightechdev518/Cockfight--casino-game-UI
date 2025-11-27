@@ -1,0 +1,408 @@
+.live-video-container {
+  position: relative;
+  width: 100%;
+  max-width: 100vw;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+}
+
+/* Total Bet Display */
+.total-bet-display {
+  position: absolute;
+  bottom: 1rem;
+  right: 1rem;
+  padding: 0.5rem 1rem;  
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: bold;
+  z-index: 15;
+  pointer-events: none;
+}
+
+.total-bet-display-value {
+  color: #ffd700;
+}
+
+.video-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #000;
+}
+
+.live-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #000;
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  /* Ensure video plays as background */
+  pointer-events: none;
+}
+
+.video-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+}
+
+.placeholder-content {
+  text-align: center;
+  color: #b8b8b8;
+}
+
+.placeholder-content svg {
+  color: #ffd700;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.placeholder-content p {
+  margin: 0.5rem 0;
+  font-size: 1rem;
+}
+
+.placeholder-hint {
+  font-size: 0.75rem !important;
+  color: #666 !important;
+  margin-top: 1rem !important;
+}
+
+/* Overlays */
+.video-overlay-top-left,
+.video-overlay-left,
+.video-overlay-top-right {
+  position: absolute;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.video-overlay-top-left {
+  top: 0.75rem;
+  left: 0.75rem;
+}
+
+.video-overlay-left {
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.video-overlay-top-right {
+  top: 0.75rem;
+  right: 0.75rem;
+}
+
+.game-info-overlay {
+  background: rgba(0, 0, 0, 0.7);
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  color: #ffd700;
+  font-weight: bold;
+  font-size: 0.9rem;
+  border: 1px solid rgba(255, 215, 0, 0.3);
+}
+
+.close-button {
+  background: rgba(60, 60, 60, 0.9);
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #fff;
+  transition: all 0.2s ease;
+  pointer-events: auto;
+  padding: 0;
+}
+
+.close-button:hover {
+  background: rgba(80, 80, 80, 0.95);
+  transform: scale(1.05);
+}
+
+.close-button:active {
+  transform: scale(0.95);
+}
+
+.close-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.table-info {
+  background: rgba(0, 0, 0, 0.7);
+  padding: 1rem;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  min-width: 200px;
+}
+
+.table-id {
+  font-weight: bold;
+  color: #ffd700;
+  margin-bottom: 0.5rem;
+}
+
+.table-time {
+  color: #b8b8b8;
+  margin-bottom: 0.25rem;
+  font-size: 0.8rem;
+}
+
+.table-phone {
+  color: #b8b8b8;
+  font-size: 0.75rem;
+}
+
+.video-controls-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+  background: transparent;
+  padding: 0;
+}
+
+.video-controls-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.control-icon {
+  background: rgba(60, 60, 60, 0.9);
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+}
+
+.control-icon:hover {
+  background: rgba(80, 80, 80, 0.95);
+  transform: scale(1.05);
+}
+
+.control-icon:active {
+  transform: scale(0.95);
+}
+
+.control-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.video-time {
+  color: #fff;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  font-family: 'Courier New', monospace;
+  margin-top: 0.25rem;
+  text-align: right;
+}
+
+.countdown-badge {
+  position: absolute;
+  top: 3rem;
+  right: 1rem;
+  width: 120px;
+  height: 120px;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.countdown-badge .CircularProgressbar {
+  filter: drop-shadow(0 0 8px rgba(0, 255, 136, 0.8));
+}
+
+.countdown-badge .CircularProgressbar .CircularProgressbar-text {
+  font-weight: 900;
+  text-shadow: 0 0 15px rgba(0, 255, 136, 0.8), 0 0 30px rgba(0, 255, 136, 0.5);
+  dominant-baseline: middle;
+  text-anchor: middle;
+}
+
+
+.video-overlay-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.video-overlay-center.playing {
+  opacity: 0;
+}
+
+.video-overlay-center:hover {
+  opacity: 1;
+}
+
+.video-overlay-center .play-button {
+  pointer-events: all;
+  transition: opacity 0.3s ease;
+}
+
+.play-button {
+  background: rgba(0, 0, 0, 0.7);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  pointer-events: auto;
+}
+
+.play-button:hover {
+  background: rgba(0, 0, 0, 0.9);
+  border-color: #ffd700;
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
+.play-button:active {
+  transform: translate(-50%, -50%) scale(0.95);
+}
+
+/* Mobile Responsive Styles */
+@media (max-width: 1023px) {
+  .video-overlay-top-left {
+    top: 0.5rem;
+    left: 0.5rem;
+  }
+  
+  .video-overlay-top-right {
+    top: 0.5rem;
+    right: 0.5rem;
+  }
+  
+  .close-button {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .close-button svg {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .control-icon {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .control-icon svg {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .video-time {
+    font-size: 0.65rem;
+    margin-top: 0.2rem;
+  }
+  
+  .countdown-badge .CircularProgressbar .CircularProgressbar-text {
+    font-size: 2.5rem;
+  }
+  
+  .play-button {
+    width: 60px;
+    height: 60px;
+  }
+  
+  .play-button svg {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+@media (max-width: 768px) {
+  .countdown-badge {
+    width: 90px; /* Slightly larger for better visibility */
+    height: 90px;
+    top: 2.5rem;
+    right: 0.75rem;
+  }
+  
+  .countdown-badge .CircularProgressbar .CircularProgressbar-text {
+    font-size: 2.2rem; /* More readable */
+  }
+  
+  .play-button {
+    width: 64px; /* Better touch target */
+    height: 64px;
+  }
+  
+  .play-button svg {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .close-button {
+    width: 44px; /* Better touch target */
+    height: 44px;
+  }
+  
+  .close-button svg {
+    width: 20px;
+    height: 20px;
+  }
+  
+  .control-icon {
+    width: 40px; /* Better touch target */
+    height: 40px;
+  }
+  
+  .control-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+  
+  .video-controls-row {
+    gap: 0.4rem; /* Better spacing */
+  }
+  
+  .video-time {
+    font-size: 0.65rem; /* More readable */
+    margin-top: 0.3rem;
+  }
+  
+  .total-bet-display {
+    font-size: 0.85rem; /* More readable */
+    padding: 0.4rem 0.8rem;
+    bottom: 0.75rem;
+    right: 0.75rem;
+  }
+}

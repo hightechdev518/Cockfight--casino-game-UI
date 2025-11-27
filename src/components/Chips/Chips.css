@@ -1,0 +1,182 @@
+.chips-container {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+/* Hide navigation arrows when chips are in controls row */
+.chips-in-controls .chips-container .chip-nav-btn {
+  display: none;
+}
+
+.chips-in-controls .chips-container .chips-grid {
+  gap: 0.3rem;
+}
+
+.chip-nav-btn {
+  background: transparent;
+  border: none;
+  color: #d4a574; /* Light brown color */
+  cursor: pointer;
+  padding: 0.3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s;
+}
+
+.chip-nav-btn:hover {
+  opacity: 0.7;
+}
+
+.chips-grid {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.chip {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  /* Mobile touch optimizations */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.chip:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+}
+
+.chip.selected {
+  border-color: #ffd700;
+  border-width: 3px;
+  box-shadow: 0 0 15px rgba(255, 215, 0, 0.6);
+  transform: translateY(-2px) scale(1.1);
+}
+
+.chip-inner {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.chip-value {
+  font-weight: bold;
+  font-size: 0.65rem;
+  color: #fff;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+  z-index: 2;
+}
+
+/* Chip Colors (matching image order) */
+.chip-magenta {
+  background: radial-gradient(circle at 30% 30%, #e91e63, #c2185b); /* 500 - Magenta */
+}
+
+.chip-blue {
+  background: radial-gradient(circle at 30% 30%, #1976d2, #1565c0); /* 1000 - Dark blue */
+}
+
+.chip-gold {
+  background: radial-gradient(circle at 30% 30%, #ffd700, #ffb300); /* 5000 - Golden yellow */
+}
+
+.chip-teal {
+  background: radial-gradient(circle at 30% 30%, #00bcd4, #0097a7); /* 10000 - Teal/light blue */
+}
+
+.chip-orange {
+  background: radial-gradient(circle at 30% 30%, #ff9800, #f57c00); /* 50000 - Orange */
+}
+
+.chip-selected-indicator {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #ffd700;
+  color: #0a0e27;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  z-index: 10;
+  font-size: 0.6rem;
+}
+
+.chip-selected-indicator svg {
+  width: 12px;
+  height: 12px;
+  }
+
+/* Mobile Responsive Styles */
+@media (max-width: 1023px) {
+  .chip {
+    width: 36px;
+    height: 36px;
+  }
+  
+  .chip-value {
+    font-size: 0.6rem;
+}
+
+  .chips-grid {
+    gap: 0.25rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 768px) {
+  .chip {
+    width: 44px; /* Better touch target */
+    height: 44px;
+  }
+  
+  .chip-value {
+    font-size: 0.65rem; /* More readable */
+  }
+  
+  .chips-grid {
+    gap: 0.3rem; /* Better spacing */
+  }
+  
+  .chip-nav-btn {
+    padding: 0.4rem; /* Larger touch area */
+    min-width: 44px;
+    min-height: 44px;
+  }
+  
+  .chip-selected-indicator {
+    width: 18px;
+    height: 18px;
+    top: -4px;
+    right: -4px;
+  }
+  
+  .chip-selected-indicator svg {
+    width: 12px;
+    height: 12px;
+  }
+}

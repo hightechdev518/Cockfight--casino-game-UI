@@ -1,0 +1,338 @@
+.betting-interface {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  min-height: 100%;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-y: visible;
+  background: linear-gradient(135deg, rgba(10, 14, 39, 0.95) 0%, rgba(5, 8, 18, 0.95) 100%);
+  position: relative;
+}
+
+.betting-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.6rem;
+  min-height: 200px;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  overflow-y: visible;
+}
+
+/* Main Bets */
+.main-bets {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.25rem;
+  flex: 1;
+  min-height: 0;
+  margin: 0.2rem 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+.bet-button {
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  padding: 0.4rem 0.3rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: bold;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 25, 45, 0.6);
+  /* Mobile touch optimizations */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.bet-button:hover {
+  border-color: rgba(255, 215, 0, 0.6);
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+  transform: translateY(-1px);
+}
+
+.bet-button:active {
+  transform: translateY(0);
+}
+
+/* Main Bet Styles */
+.main-bet {
+  font-size: 0.95rem;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  padding: 0.75rem 0.6rem;
+  min-height: 140px; /* Balanced height for visibility */
+}
+
+.main-bet.dragon {
+  background: linear-gradient(135deg, rgba(220, 20, 60, 0.4) 0%, rgba(139, 0, 0, 0.4) 100%);
+  color: #fff;
+}
+
+.main-bet.tiger {
+  background: linear-gradient(135deg, rgba(255, 152, 0, 0.4) 0%, rgba(255, 193, 7, 0.4) 100%);
+  color: #fff;
+}
+
+.main-bet.tie {
+  background: linear-gradient(135deg, rgba(0, 200, 100, 0.4) 0%, rgba(0, 255, 136, 0.4) 100%);
+  color: #fff;
+}
+
+.bet-label-large {
+  font-size: 1.6rem;
+  font-weight: 900;
+  margin-bottom: 0.15rem;
+}
+
+.bet-stats {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.25rem;
+  font-size: 0.7rem;
+  opacity: 0.9;
+}
+
+.bet-percentage {
+  font-weight: bold;
+}
+
+.bet-icon {
+  font-size: 0.8rem;
+}
+
+.bet-amount-display {
+  font-weight: bold;
+}
+
+/* Side Bet Styles */
+.side-bet {
+  min-height: 60px; /* Balanced height for visibility */
+  font-size: 0.8rem;
+  padding: 0.5rem 0.35rem;
+}
+
+.side-bet.dragon-red,
+.side-bet.tiger-red {
+  background: rgba(220, 20, 60, 0.25);
+  color: #ff6b6b;
+}
+
+.side-bet.dragon-black,
+.side-bet.tiger-black {
+  background: rgba(30, 30, 30, 0.6);
+  color: #b8b8b8;
+}
+
+.side-bet.dragon-odd,
+.side-bet.tiger-odd {
+  background: rgba(255, 193, 7, 0.25);
+  color: #ffd700;
+}
+
+.side-bet.dragon-even,
+.side-bet.tiger-even {
+  background: rgba(0, 255, 136, 0.25);
+  color: #00ff88;
+}
+
+.bet-label {
+  font-size: 0.85rem;
+  margin-bottom: 0.1rem;
+  font-weight: 700;
+}
+
+.bet-odds {
+  font-size: 0.7rem;
+  opacity: 0.9;
+}
+
+.bet-amount {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: #ffd700;
+  color: #0a0e27;
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-size: 0.65rem;
+  font-weight: bold;
+}
+
+/* Bottom Row - Side bets (8 buttons) */
+.bottom-row-bets {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.2rem;
+  flex-shrink: 0;
+  margin-top: 0.3rem;
+  width: 100%;
+  max-width: 100%;
+}
+
+
+/* Bottom Control Bar - Two Row Layout */
+.bottom-control-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  width: 100%;
+  max-width: 100%;
+  background: transparent;
+  border-top: none;
+  overflow-x: hidden;
+}
+
+/* Top Row: Dark Gray - Controls with Timestamp */
+.control-bar-top {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1.25rem;
+  width: 100%;
+  max-width: 100%;
+  background: rgba(60, 60, 60, 0.95);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  min-height: 90px;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+/* Bottom Row: Black - Account Info */
+.control-bar-bottom {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1.25rem;
+  width: 100%;
+  max-width: 100%;
+  background: rgba(0, 0, 0, 0.95);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  min-height: 70px;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+.selected-chip-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Mobile Responsive Styles */
+@media (max-width: 1023px) {
+  .betting-interface {
+    padding: 0.25rem;
+  }
+  
+  .betting-area {
+    padding: 0.3rem;
+    gap: 0.2rem;
+  }
+  
+  /* Main Bets - Show in a row on mobile */
+  .main-bets {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.25rem; /* Better spacing */
+    margin: 0.25rem 0;
+  }
+  
+  .main-bet {
+    min-height: 70px; /* Better touch target */
+    padding: 0.5rem 0.4rem;
+    font-size: 0.9rem;
+  }
+  
+  .bet-label-large {
+    font-size: 1.5rem; /* More readable */
+  }
+  
+  .bet-stats {
+    font-size: 0.7rem;
+    gap: 0.35rem;
+  }
+  
+  /* Side bets - Better touch targets on mobile */
+  .side-bet {
+    min-height: 44px; /* Minimum touch target size */
+    font-size: 0.7rem;
+    padding: 0.4rem 0.25rem;
+  }
+  
+  /* Bottom Row - 4 columns on mobile (8 buttons total) */
+  .bottom-row-bets {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.2rem; /* Better spacing */
+    margin-top: 0.3rem;
+  }
+  
+  /* Bottom Control Bar - Stack on mobile */
+  .control-bar-top {
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem 0.5rem;
+    min-height: auto;
+  }
+  
+  .control-bar-bottom {
+    padding: 0.75rem 0.5rem;
+    min-height: auto;
+  }
+  
+}
+
+@media (max-width: 768px) {
+  /* Keep main bets in 3 columns on small mobile too */
+  .main-bets {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.15rem;
+  }
+  
+  .main-bet {
+    min-height: 50px;
+    padding: 0.3rem 0.2rem;
+    font-size: 0.75rem;
+  }
+  
+  .bet-label-large {
+    font-size: 1.1rem;
+  }
+  
+  .bet-stats {
+    font-size: 0.6rem;
+  }
+  
+  .bottom-row-bets {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  
+  .side-bet {
+    min-height: 30px;
+    font-size: 0.6rem;
+    padding: 0.25rem 0.15rem;
+  }
+  
+  .bet-label {
+    font-size: 0.7rem;
+  }
+  
+  .bet-odds {
+    font-size: 0.55rem;
+  }
+}

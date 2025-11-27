@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Test Video - Casino</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #fff;
+        }
+        button {
+            background: #ffd700;
+            color: #000;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        button:hover {
+            background: #ffed4e;
+        }
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        #status {
+            margin: 20px 0;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+        }
+        video {
+            max-width: 100%;
+            margin-top: 20px;
+            border: 2px solid #ffd700;
+        }
+        .info {
+            background: rgba(255, 215, 0, 0.1);
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border-left: 4px solid #ffd700;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎰 Casino Test Video Generator</h1>
+    <div class="info">
+        <p><strong>Instructions:</strong></p>
+        <ol>
+            <li>Click "Generate Test Video" below</li>
+            <li>Wait for the video to be generated (about 5 seconds)</li>
+            <li>Right-click the download link and "Save As"</li>
+            <li>Save it as <code>live-casino.mp4</code> in <code>public/videos/</code> folder</li>
+            <li>Note: Browser may generate WebM format. You can convert it to MP4 using online tools or rename if your browser supports it.</li>
+        </ol>
+    </div>
+
+    <button id="generateBtn">Generate Test Video</button>
+    <div id="status"></div>
+    <video id="preview" controls style="display: none;"></video>
+    <div id="downloadContainer" style="display: none; margin-top: 20px;">
+        <a id="downloadLink" download="live-casino.webm" style="display: inline-block; padding: 10px 20px; background: #4caf50; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
+            📥 Download Test Video
+        </a>
+    </div>
+
+    <script>
+        const canvas = document.createElement('canvas');
+        canvas.width = 1280;
+        canvas.height = 720;
+        const ctx = canvas.getContext('2d');
+
+        const generateBtn = document.getElementById('generateBtn');
+        const status = document.getElementById('status');
+        const preview = document.getElementById('preview');
+        const downloadLink = document.getElementById('downloadLink');
+        const downloadContainer = document.getElementById('downloadContainer');
+
+        // Check if MediaRecorder is supported
+        if (!window.MediaRecorder) {
+            status.innerHTML = '<p style="color: #ff6b6b;">MediaRecorder API not supported in this browser. Please use Chrome, Firefox, or Edge.</p>';
+            generateBtn.disabled = true;
+        }
+
+        generateBtn.addEventListener('click', async () => {
+            status.innerHTML = '<p>🎬 Generating video... This will take about 5 seconds.</p>';
+            generateBtn.disabled = true;
+
+            try {
+                // Check for codec support
+                let mimeType = 'video/webm;codecs=vp9';
+                if (!MediaRecorder.isTypeSupported(mimeType)) {
+                    mimeType = 'video/webm;codecs=vp8';
+                }
+                if (!MediaRecorder.isTypeSupported(mimeType)) {
+                    mimeType = 'video/webm';
+                }
+
+                const stream = canvas.captureStream(30); // 30 FPS
+                const mediaRecorder = new MediaRecorder(stream, { mimeType });
+
+                const chunks = [];
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) {
+                        chunks.push(e.data);
+                    }
+                };
+
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(chunks, { type: mimeType });
+                    const url = URL.createObjectURL(blob);
+                    
+                    preview.src = url;
+                    preview.style.display = 'block';
+                    
+                    downloadLink.href = url;
+                    downloadLink.download = mimeType.includes('vp9') || mimeType.includes('vp8') 
+                        ? 'live-casino.webm' 
+                        : 'live-casino.mp4';
+                    downloadContainer.style.display = 'block';
+                    
+                    status.innerHTML = `
+                        <p style="color: #4caf50;">✅ Video generated successfully!</p>
+                        <p><strong>Format:</strong> ${mimeType}</p>
+                        <p><strong>Size:</strong> ${(blob.size / 1024 / 1024).toFixed(2)} MB</p>
+                        <p><strong>Note:</strong> If the file is WebM format, you may need to convert it to MP4 for best compatibility, or the browser may play it directly.</p>
+                    `;
+                    generateBtn.disabled = false;
+                };
+
+                // Generate 5 seconds of video (150 frames at 30fps)
+                let frame = 0;
+                const totalFrames = 150;
+                const startTime = Date.now();
+
+                const animate = () => {
+                    // Animated gradient background
+                    const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+                    const hue = (frame * 2) % 360;
+                    gradient.addColorStop(0, `hsl(${hue}, 70%, 20%)`);
+                    gradient.addColorStop(0.5, `hsl(${hue + 60}, 70%, 15%)`);
+                    gradient.addColorStop(1, `hsl(${hue + 120}, 70%, 10%)`);
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                    // Casino table pattern
+                    ctx.fillStyle = 'rgba(139, 0, 0, 0.6)';
+                    ctx.fillRect(0, canvas.height * 0.3, canvas.width, canvas.height * 0.4);
+
+                    // Animated golden circle (chip)
+                    const centerX = canvas.width / 2;
+                    const centerY = canvas.height / 2;
+                    const radius = 80 + Math.sin(frame * 0.1) * 15;
+                    
+                    ctx.fillStyle = 'rgba(255, 215, 0, 0.4)';
+                    ctx.beginPath();
+                    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.strokeStyle = '#ffd700';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    // Casino text
+                    ctx.fillStyle = '#ffd700';
+                    ctx.font = 'bold 72px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+                    ctx.shadowBlur = 10;
+                    ctx.fillText('CASINO LIVE', centerX, centerY - 80);
+                    
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '32px Arial';
+                    ctx.shadowBlur = 5;
+                    ctx.fillText('Dragon Tiger', centerX, centerY + 20);
+                    
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                    ctx.font = '24px Arial';
+                    ctx.shadowBlur = 0;
+                    ctx.fillText(`Test Video - Frame ${frame + 1}/${totalFrames}`, centerX, centerY + 100);
+
+                    // Animated particles
+                    for (let i = 0; i < 20; i++) {
+                        const x = (centerX + Math.cos((frame + i) * 0.1) * 200) % canvas.width;
+                        const y = (centerY + Math.sin((frame + i) * 0.15) * 150) % canvas.height;
+                        ctx.fillStyle = `rgba(255, 215, 0, ${0.3 + Math.sin((frame + i) * 0.2) * 0.2})`;
+                        ctx.beginPath();
+                        ctx.arc(x, y, 5, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+
+                    frame++;
+                    if (frame < totalFrames) {
+                        requestAnimationFrame(animate);
+                    } else {
+                        mediaRecorder.stop();
+                        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                        console.log(`Video generation completed in ${elapsed} seconds`);
+                    }
+                };
+
+                mediaRecorder.start();
+                animate();
+            } catch (error) {
+                status.innerHTML = `<p style="color: #ff6b6b;">❌ Error: ${error.message}</p>`;
+                generateBtn.disabled = false;
+                console.error('Error:', error);
+            }
+        });
+    </script>
+</body>
+</html>
+

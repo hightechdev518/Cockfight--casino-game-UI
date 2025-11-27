@@ -1,0 +1,93 @@
+.account-info {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+.account-balance-section {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.account-value.balance {
+  color: #fff;
+  font-size: 1.1rem; /* Balanced size */
+  font-weight: bold;
+}
+
+.refresh-icon {
+  background: transparent;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  padding: 0.3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+  width: 20px;
+  height: 20px;
+}
+
+.refresh-icon:hover {
+  opacity: 1;
+}
+
+.refresh-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.game-info-section {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.game-id {
+  color: #fff;
+  font-size: 0.9rem; /* Balanced size */
+  font-family: 'Courier New', monospace;
+}
+
+.coin-icon {
+  color: #fff;
+  opacity: 0.8;
+  flex-shrink: 0;
+  width: 18px; /* Balanced size */
+  height: 18px; /* Balanced size */
+}
+
+.bet-range {
+  color: #fff;
+  font-size: 0.9rem; /* Balanced size */
+}
+
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+  .account-info {
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+  
+  .refresh-icon {
+    padding: 0.3rem;
+    min-width: 44px;
+    min-height: 44px;
+  }
+  
+  .refresh-icon svg {
+    width: 16px;
+    height: 16px;
+  }
+}

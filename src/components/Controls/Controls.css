@@ -1,0 +1,103 @@
+/* Horizontal inline controls layout */
+.controls-inline {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+.controls-left-group,
+.controls-center-group,
+.controls-right-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.controls-center-group {
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.controls-right-group {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 1rem;
+}
+
+.controls-timestamp {
+  color: #fff;
+  font-size: 0.75rem;
+  text-align: right;
+  opacity: 0.9;
+  font-family: 'Courier New', monospace;
+  white-space: nowrap;
+}
+
+/* Circular buttons with gold borders for undo/refresh/menu */
+.control-btn-circle {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid #ffd700;
+  background: transparent;
+  color: #ffd700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+  /* Mobile touch optimizations */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.control-btn-circle:hover {
+  background: rgba(255, 215, 0, 0.1);
+  border-color: #ffd700;
+}
+
+.control-btn-circle:active {
+  transform: scale(0.95);
+}
+
+.control-btn-circle.double .double-text {
+  font-weight: bold;
+  font-size: 1rem;
+  color: #fff;
+}
+
+.control-btn-circle.confirm,
+.control-btn-circle.clear,
+.control-btn-circle.double {
+  border: none;
+  background: rgba(60, 60, 60, 0.9);
+  color: #fff;
+}
+
+.control-btn-circle.confirm:hover,
+.control-btn-circle.clear:hover,
+.control-btn-circle.double:hover {
+  background: rgba(80, 80, 80, 0.9);
+}
+
+.control-btn-circle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+  .control-btn-circle {
+    width: 44px;
+    height: 44px;
+  }
+}
