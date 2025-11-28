@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState, useRef } from 'react'
 import { useGameStore, BetType } from '../../store/gameStore'
 import SelectedChipDisplay from '../Chips/SelectedChipDisplay'
+import FlyingChip from '../Chips/FlyingChip'
 import Controls from '../Controls/Controls'
 import AccountInfo from '../AccountInfo/AccountInfo'
 import './BettingInterface.css'
@@ -30,6 +31,15 @@ const BET_ODDS: Readonly<Record<BetType, number>> = {
 const BettingInterface: React.FC = () => {
   const { selectedChip, addBet, clearBets } = useGameStore()
   const [pendingBets, setPendingBets] = useState<Map<BetType, number>>(new Map())
+  const [flyingChips, setFlyingChips] = useState<Array<{
+    id: string
+    chipValue: number
+    startX: number
+    startY: number
+    endX: number
+    endY: number
+  }>>([])
+  const betButtonRefs = useRef<Partial<Record<BetType, HTMLButtonElement>>>({})
 
   /**
    * Handles bet button click
@@ -43,6 +53,33 @@ const BettingInterface: React.FC = () => {
       const newAmount = currentAmount + selectedChip
       return new Map(prevBets).set(betType, newAmount)
     })
+
+    // Trigger flying chip animation
+    const chipButton = betButtonRefs.current[betType]
+    if (chipButton) {
+      const chipElement = document.querySelector('.chips-container button.selected') as HTMLElement
+      if (chipElement) {
+        const startRect = chipElement.getBoundingClientRect()
+        const endRect = chipButton.getBoundingClientRect()
+
+        // Calculate center positions
+        const startX = startRect.left + startRect.width / 2
+        const startY = startRect.top + startRect.height / 2
+        const endX = endRect.left + endRect.width / 2
+        const endY = endRect.top + endRect.height / 2
+
+        const newFlyingChip = {
+          id: `${betType}-${Date.now()}-${Math.random()}`,
+          chipValue: selectedChip,
+          startX: startX - 20, // 40px chip, so center is -20
+          startY: startY - 20,
+          endX: endX - 20,
+          endY: endY - 20
+        }
+
+        setFlyingChips((prev) => [...prev, newFlyingChip])
+      }
+    }
   }, [selectedChip])
 
   /**
@@ -94,6 +131,14 @@ const BettingInterface: React.FC = () => {
   }, [pendingBets])
 
   /**
+   * Removes a flying chip from the animation queue
+   * @param chipId - ID of the flying chip to remove
+   */
+  const handleFlyingChipComplete = useCallback((chipId: string) => {
+    setFlyingChips((prev) => prev.filter((chip) => chip.id !== chipId))
+  }, [])
+
+  /**
    * Calculates total amount of all pending bets
    * @returns Total bet amount
    */
@@ -123,6 +168,7 @@ const BettingInterface: React.FC = () => {
         {/* Main Bets - 3 large areas */}
         <div className="main-bets flex-1">
           <button 
+            ref={(el) => el && (betButtonRefs.current.dragon = el)}
             className="bet-button main-bet dragon"
             onClick={() => handleBetClick('dragon')}
           >
@@ -134,6 +180,7 @@ const BettingInterface: React.FC = () => {
             </div>
           </button>
           <button 
+            ref={(el) => el && (betButtonRefs.current.tie = el)}
             className="bet-button main-bet tie"
             onClick={() => handleBetClick('tie')}
           >
@@ -145,6 +192,7 @@ const BettingInterface: React.FC = () => {
             </div>
           </button>
           <button 
+            ref={(el) => el && (betButtonRefs.current.tiger = el)}
             className="bet-button main-bet tiger"
             onClick={() => handleBetClick('tiger')}
           >
@@ -160,6 +208,19 @@ const BettingInterface: React.FC = () => {
         {/* Bottom Row - Side bets (8 buttons on mobile, 2 on desktop) */}
 
       </div>
+
+      {/* Flying Chips Container */}
+      {flyingChips.map((chip) => (
+        <FlyingChip
+          key={chip.id}
+          chipValue={chip.chipValue}
+          startX={chip.startX}
+          startY={chip.startY}
+          endX={chip.endX}
+          endY={chip.endY}
+          onAnimationComplete={() => handleFlyingChipComplete(chip.id)}
+        />
+      ))}
 
       {/* Bottom Control Bar - Two rows: Top (dark gray) and Bottom (black) */}
       <div className="bottom-control-bar flex-shrink-0">
