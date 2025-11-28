@@ -1,7 +1,8 @@
-import { useCallback, useMemo, useState, useRef } from 'react'
+import { useCallback, useMemo, useState, useRef, useEffect } from 'react'
 import { useGameStore, BetType } from '../../store/gameStore'
 import SelectedChipDisplay from '../Chips/SelectedChipDisplay'
 import FlyingChip from '../Chips/FlyingChip'
+import SuccessOverlay from '../Controls/SuccessOverlay'
 import Controls from '../Controls/Controls'
 import AccountInfo from '../AccountInfo/AccountInfo'
 import './BettingInterface.css'
@@ -40,6 +41,16 @@ const BettingInterface: React.FC = () => {
     endY: number
   }>>([])
   const betButtonRefs = useRef<Partial<Record<BetType, HTMLButtonElement>>>({})
+  const [showSuccess, setShowSuccess] = useState(false)
+  const successTimerRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current) {
+        window.clearTimeout(successTimerRef.current)
+      }
+    }
+  }, [])
 
   /**
    * Handles bet button click
@@ -98,6 +109,15 @@ const BettingInterface: React.FC = () => {
       }
     })
     setPendingBets(new Map())
+    // Show success overlay briefly
+    setShowSuccess(true)
+    if (successTimerRef.current) {
+      window.clearTimeout(successTimerRef.current)
+    }
+    successTimerRef.current = window.setTimeout(() => {
+      setShowSuccess(false)
+      successTimerRef.current = null
+    }, 3000)
   }, [pendingBets, addBet])
 
   /**
@@ -222,6 +242,9 @@ const BettingInterface: React.FC = () => {
         />
       ))}
 
+      {/* Success overlay (appears on confirm) */}
+      <SuccessOverlay show={showSuccess} onClose={() => setShowSuccess(false)} />
+
       {/* Bottom Control Bar - Two rows: Top (dark gray) and Bottom (black) */}
       <div className="bottom-control-bar flex-shrink-0">
         {/* Top Row: Dark Gray - Controls with Timestamp */}
@@ -242,6 +265,7 @@ const BettingInterface: React.FC = () => {
               }
             }}
             chipSlot={<SelectedChipDisplay />}
+            pendingBetAmount={totalBetAmount}
           />
         </div>
         

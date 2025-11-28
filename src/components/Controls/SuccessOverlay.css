@@ -1,0 +1,285 @@
+.success-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+  pointer-events: none;
+  background: radial-gradient(circle 600px at center, rgba(255, 215, 0, 0.08) 0%, transparent 80%);
+  animation: overlayPulse 3s ease-out forwards;
+}
+
+.success-card {
+  position: relative;
+  pointer-events: auto;
+  background: linear-gradient(135deg, rgba(25,25,40,0.95) 0%, rgba(15,15,30,0.95) 100%);
+  border-radius: 16px;
+  padding: 28px 44px;
+  box-shadow: 
+    0 0 60px rgba(255, 215, 0, 0.15),
+    0 20px 60px rgba(0, 0, 0, 0.9),
+    inset 0 1px 1px rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(255, 215, 0, 0.2);
+  backdrop-filter: blur(8px) saturate(130%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: center;
+  animation: bounceScale 3s cubic-bezier(0.22, 0.9, 0.35, 1) forwards;
+  box-shadow: 
+    0 0 30px rgba(255, 215, 0, 0.2),
+    0 0 60px rgba(255, 140, 0, 0.1),
+    0 20px 60px rgba(0, 0, 0, 0.9);
+}
+
+.success-card::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 16px;
+  background: linear-gradient(45deg, rgba(255, 215, 0, 0.3), rgba(255, 160, 0, 0.1), rgba(255, 215, 0, 0.2));
+  opacity: 0;
+  animation: cardGlow 3s ease-in-out forwards;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.success-text {
+  color: #ffd96b;
+  font-weight: 900;
+  font-size: 2.4rem;
+  letter-spacing: 1px;
+  text-shadow: 
+    0 0 20px rgba(255, 215, 0, 0.6),
+    0 0 40px rgba(255, 215, 0, 0.3),
+    0 4px 12px rgba(0, 0, 0, 0.8);
+  text-align: center;
+  animation: textPulse 3s ease-in-out forwards;
+  position: relative;
+  z-index: 2;
+}
+
+/* Decorative sparkles/confetti */
+.success-sparkles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: 16px;
+}
+
+/* Create 12 sparkle particles */
+.success-sparkles::before,
+.success-sparkles::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #ffeb3b, #ff9800);
+  box-shadow: 
+    0 0 10px rgba(255, 215, 0, 0.8),
+    0 0 20px rgba(255, 160, 0, 0.4);
+  filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.6));
+}
+
+.success-sparkles::before {
+  left: 8%;
+  top: 20%;
+  animation: sparkle1 3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+.success-sparkles::after {
+  right: 10%;
+  top: 15%;
+  animation: sparkle2 3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  animation-delay: 0.1s;
+}
+
+/* Additional sparkle layers with pseudo-elements */
+.success-card::after {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  left: 15%;
+  top: 70%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #ffeb3b, #ff9800);
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.7);
+  filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.5));
+  animation: sparkle3 3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  animation-delay: 0.2s;
+  pointer-events: none;
+}
+
+@keyframes bounceScale {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0) rotateX(20deg);
+  }
+  /* First bounce - BIG SCALE (1.35x) */
+  5% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.35) rotateX(0deg);
+  }
+  12% {
+    transform: translateY(-4px) scale(1.35);
+  }
+  18% {
+    /* Return to normal size from first bounce */
+    transform: translateY(-2px) scale(1);
+  }
+  /* Second bounce - MEDIUM SCALE (1.18x) */
+  25% {
+    transform: translateY(-4px) scale(1.18);
+  }
+  32% {
+    /* Return to normal size from second bounce */
+    transform: translateY(-2px) scale(1);
+  }
+  /* Third bounce - SMALL SCALE (1.08x) */
+  40% {
+    transform: translateY(-3px) scale(1.08);
+  }
+  47% {
+    /* Return to normal size from third bounce */
+    transform: translateY(-2px) scale(1);
+  }
+  /* Hold at original size */
+  85% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-30px) scale(0.95);
+  }
+}
+
+@keyframes cardGlow {
+  0%, 100% {
+    opacity: 0;
+    box-shadow: 0 0 0px rgba(255, 215, 0, 0);
+  }
+  25% {
+    opacity: 0.6;
+    box-shadow: 0 0 40px rgba(255, 215, 0, 0.4);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 60px rgba(255, 215, 0, 0.5);
+  }
+  75% {
+    opacity: 0.7;
+    box-shadow: 0 0 40px rgba(255, 215, 0, 0.3);
+  }
+}
+
+@keyframes textPulse {
+  0% {
+    opacity: 0;
+    text-shadow: 
+      0 0 0px rgba(255, 215, 0, 0),
+      0 0 0px rgba(255, 215, 0, 0);
+  }
+  8% {
+    opacity: 1;
+    text-shadow: 
+      0 0 20px rgba(255, 215, 0, 0.8),
+      0 0 40px rgba(255, 215, 0, 0.4);
+  }
+  50% {
+    text-shadow: 
+      0 0 25px rgba(255, 215, 0, 0.7),
+      0 0 50px rgba(255, 215, 0, 0.3);
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes sparkle1 {
+  0% {
+    transform: translate(0, 0) scale(0.4) rotateZ(0deg);
+    opacity: 0;
+  }
+  5% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1) rotateZ(0deg);
+  }
+  45% {
+    transform: translate(-80px, -120px) scale(0.8) rotateZ(180deg);
+    opacity: 0.8;
+  }
+  85% {
+    opacity: 0.3;
+  }
+  100% {
+    transform: translate(-120px, -180px) scale(0.2) rotateZ(360deg);
+    opacity: 0;
+  }
+}
+
+@keyframes sparkle2 {
+  0% {
+    transform: translate(0, 0) scale(0.4) rotateZ(0deg);
+    opacity: 0;
+  }
+  5% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1) rotateZ(0deg);
+  }
+  45% {
+    transform: translate(90px, -100px) scale(0.8) rotateZ(-180deg);
+    opacity: 0.8;
+  }
+  85% {
+    opacity: 0.3;
+  }
+  100% {
+    transform: translate(130px, -170px) scale(0.2) rotateZ(-360deg);
+    opacity: 0;
+  }
+}
+
+@keyframes sparkle3 {
+  0% {
+    transform: translate(0, 0) scale(0) rotateZ(0deg);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1) rotateZ(0deg);
+  }
+  50% {
+    transform: translate(60px, 100px) scale(0.9) rotateZ(180deg);
+    opacity: 0.7;
+  }
+  85% {
+    opacity: 0.2;
+  }
+  100% {
+    transform: translate(100px, 160px) scale(0.15) rotateZ(360deg);
+    opacity: 0;
+  }
+}
+
+@keyframes overlayPulse {
+  0% {
+    opacity: 0;
+  }
+  5% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}

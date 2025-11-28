@@ -1,5 +1,4 @@
 import { useCallback } from 'react'
-import { useGameStore } from '../../store/gameStore'
 import './Controls.css'
 
 /**
@@ -16,6 +15,8 @@ interface ControlsProps {
   onUndo?: () => void
   /** Chip slot to insert between confirm and clear */
   chipSlot?: React.ReactNode
+  /** Total pending bets amount (for enable/disable state) */
+  pendingBetAmount?: number
 }
 
 /**
@@ -24,9 +25,7 @@ interface ControlsProps {
  * @param props - Component props
  * @returns JSX element
  */
-const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onUndo, chipSlot }) => {
-  const { totalBet } = useGameStore()
-
+const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onUndo, chipSlot, pendingBetAmount = 0 }) => {
   /**
    * Handles refresh button click
    */
@@ -54,7 +53,7 @@ const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onUnd
   /**
    * Checks if confirm button should be disabled
    */
-  const isConfirmDisabled = totalBet === 0
+  const isConfirmDisabled = pendingBetAmount === 0
 
   /**
    * Current timestamp formatted
