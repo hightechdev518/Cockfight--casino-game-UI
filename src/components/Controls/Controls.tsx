@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback } from 'react'
 import { useGameStore } from '../../store/gameStore'
 import './Controls.css'
 
@@ -59,17 +59,6 @@ const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onUnd
   /**
    * Current timestamp formatted
    */
-  const currentTime = useMemo(() => {
-    return new Date().toLocaleString('en-US', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      timeZone: 'America/New_York'
-    }) + ' (UTC-4)'
-  }, [])
 
   return (
     <div className="controls-inline" style={{ flex: '0 0 auto' }}>
