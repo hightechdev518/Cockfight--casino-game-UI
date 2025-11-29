@@ -102,3 +102,54 @@
     height: 44px;
   }
 }
+
+/* Landscape Mode - Vertical Control Bar */
+@media (orientation: landscape) {
+  .controls-inline {
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.5rem;
+    width: 100%;
+    height: 100%;
+  }
+
+  .controls-left-group,
+  .controls-center-group,
+  .controls-right-group {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .controls-center-group {
+    padding-left: 0;
+  }
+
+  .controls-right-group {
+    padding-left: 0;
+  }
+
+  .control-btn-circle {
+    width: 50px;
+    height: 50px;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 600px) {
+  .control-btn-circle {
+    width: 44px;
+    height: 44px;
+  }
+
+  .controls-inline {
+    gap: 0.4rem;
+  }
+
+  .controls-left-group,
+  .controls-center-group,
+  .controls-right-group {
+    gap: 0.4rem;
+  }
+}

@@ -185,8 +185,8 @@ const BettingInterface: React.FC = () => {
     <div className="betting-interface">
       <div className="betting-area">        
 
-        {/* Main Bets - 3 large areas */}
-        <div className="main-bets flex-1">
+        {/* Main Bets - Top row: Meron and Wala side by side */}
+        <div className="main-bets-top flex-1">
           <button 
             ref={(el) => el && (betButtonRefs.current.dragon = el)}
             className="bet-button main-bet dragon"
@@ -200,18 +200,6 @@ const BettingInterface: React.FC = () => {
             </div>
           </button>
           <button 
-            ref={(el) => el && (betButtonRefs.current.tie = el)}
-            className="bet-button main-bet tie"
-            onClick={() => handleBetClick('tie')}
-          >
-            <span className="bet-label-large">Draw</span>
-            <span className="bet-odds">1:8</span>
-            <div className="bet-stats">
-              <span className="bet-percentage">{getBetPercentage('tie')}</span>
-              <span className="bet-amount-display">${getBetAmount('tie')}</span>
-            </div>
-          </button>
-          <button 
             ref={(el) => el && (betButtonRefs.current.tiger = el)}
             className="bet-button main-bet tiger"
             onClick={() => handleBetClick('tiger')}
@@ -221,6 +209,22 @@ const BettingInterface: React.FC = () => {
             <div className="bet-stats">
               <span className="bet-percentage">{getBetPercentage('tiger')}</span>
               <span className="bet-amount-display">${getBetAmount('tiger')}</span>
+            </div>
+          </button>
+        </div>
+
+        {/* Bottom row: Draw centered */}
+        <div className="main-bets-bottom flex-1">
+          <button 
+            ref={(el) => el && (betButtonRefs.current.tie = el)}
+            className="bet-button main-bet tie"
+            onClick={() => handleBetClick('tie')}
+          >
+            <span className="bet-label-large">Draw</span>
+            <span className="bet-odds">1:8</span>
+            <div className="bet-stats">
+              <span className="bet-percentage">{getBetPercentage('tie')}</span>
+              <span className="bet-amount-display">${getBetAmount('tie')}</span>
             </div>
           </button>
         </div>

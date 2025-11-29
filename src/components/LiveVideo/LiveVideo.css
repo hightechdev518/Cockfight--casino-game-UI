@@ -406,3 +406,88 @@
     right: 0.75rem;
   }
 }
+
+/* Landscape Mode Optimizations */
+@media (orientation: landscape) {
+  .countdown-badge {
+    width: 100px;
+    height: 100px;
+    top: 1rem;
+    right: 0.75rem;
+  }
+
+  .countdown-badge .CircularProgressbar .CircularProgressbar-text {
+    font-size: 2rem;
+  }
+
+  .video-overlay-top-left {
+    top: 0.5rem;
+    left: calc(70px + 0.5rem); /* Account for control bar width */
+  }
+
+  .video-overlay-top-right {
+    top: 0.5rem;
+    right: 0.5rem;
+  }
+
+  .total-bet-display {
+    font-size: 0.8rem;
+    padding: 0.35rem 0.7rem;
+    bottom: 0.5rem;
+    right: 0.5rem;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 600px) {
+  .countdown-badge {
+    width: 80px;
+    height: 80px;
+    top: 0.75rem;
+    right: 0.5rem;
+  }
+
+  .countdown-badge .CircularProgressbar .CircularProgressbar-text {
+    font-size: 1.6rem;
+  }
+
+  .video-overlay-top-left {
+    left: calc(60px + 0.5rem); /* Account for smaller control bar width */
+  }
+
+  .play-button {
+    width: 50px;
+    height: 50px;
+  }
+
+  .play-button svg {
+    width: 28px;
+    height: 28px;
+  }
+
+  .close-button {
+    width: 28px;
+    height: 28px;
+  }
+
+  .close-button svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .control-icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .control-icon svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .total-bet-display {
+    font-size: 0.75rem;
+    padding: 0.3rem 0.6rem;
+    bottom: 0.4rem;
+    right: 0.4rem;
+  }
+}

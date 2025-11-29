@@ -46,7 +46,7 @@
   background-size: 20px 20px;
   background-position: 0 0;
   min-height: 0;
-  max-height: calc(280px - 60px);
+  max-height: calc(280px - 90px);
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -591,5 +591,79 @@
   
   .history-item {
     font-size: 0.75rem;
+  }
+}
+
+/* Landscape Mode Optimizations */
+@media (orientation: landscape) {
+  .game-history.detailed {
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+  }
+
+  .roadmap-container {
+    max-height: calc(100% - 60px);
+  }
+
+  .roadmap-status-bar {
+    padding: 0.4rem 0.5rem;
+    min-height: 45px;
+  }
+
+  .stat-circle {
+    width: 18px;
+    height: 18px;
+    font-size: 0.65rem;
+  }
+
+  .stat-value {
+    font-size: 0.75rem;
+  }
+
+  .round-number {
+    font-size: 0.75rem;
+  }
+
+  .filter-btn {
+    padding: 0.3rem 0.5rem;
+    min-height: 36px;
+    font-size: 0.7rem;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 600px) {
+  .game-history.detailed {
+    height: 100%;
+    max-height: 100%;
+  }
+
+  .roadmap-container {
+    max-height: calc(100% - 50px);
+  }
+
+  .roadmap-status-bar {
+    padding: 0.3rem 0.4rem;
+    min-height: 40px;
+  }
+
+  .stat-circle {
+    width: 16px;
+    height: 16px;
+    font-size: 0.6rem;
+  }
+
+  .stat-value {
+    font-size: 0.7rem;
+  }
+
+  .round-number {
+    font-size: 0.7rem;
+  }
+
+  .filter-btn {
+    padding: 0.25rem 0.4rem;
+    min-height: 32px;
+    font-size: 0.65rem;
   }
 }

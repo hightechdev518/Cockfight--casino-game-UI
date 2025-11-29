@@ -288,20 +288,6 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
               <span className="stat-value">{gameStats.tieWins}</span>
             </div>
           </div>
-          <div className="status-right">
-            <button className="filter-btn red-filter" aria-label="Filter red">
-              <span className="stat-circle white">M</span>
-              <span className="filter-icon outlined red"></span>
-              <span className="filter-icon solid red"></span>              
-              <span className="filter-icon diagonal red"></span>
-            </button>
-            <button className="filter-btn yellow-filter" aria-label="Filter yellow">
-              <span className="stat-circle white">W</span>
-              <span className="filter-icon outlined yellow"></span>
-              <span className="filter-icon "></span>              
-              <span className="filter-icon diagonal yellow"></span>
-            </button>
-          </div>
         </div>
       </div>
     )
