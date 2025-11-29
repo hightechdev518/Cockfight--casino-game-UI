@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useGameStore } from '../../store/gameStore'
 import './Chips.css'
 
-const CHIP_VALUES = [10, 20, 50, 100, 200, 500, 1000, 5000]
+const CHIP_VALUES = [10, 20, 50, 100, 200, 500, 1000, 5000, 10000,50000]
 
 const getChipSVG = (value: number) => `/${value}.svg`
 
@@ -31,7 +31,7 @@ const Chips: React.FC = () => {
             <img
               src={getChipSVG(selectedChip || 10)}
               alt={`Chip ${selectedChip || 10}`}
-              className="chip-image w-[40px] h-[40px]"
+              className="chip-image w-[56px] h-[40px]"
             />
           </div>
         </button>
@@ -52,7 +52,7 @@ const Chips: React.FC = () => {
                   <img
                     src={getChipSVG(value)}
                     alt={`Chip ${value}`}
-                    className="chip-image w-[40px] h-[40px]"
+                    className="chip-image w-[56px] h-[40px]"
                   />
                 </div>
               </button>

@@ -171,7 +171,7 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
-      timeZone: 'America/New_York'
+      timeZone: 'Asia/Shanghai'
     })
   }, [])
 
@@ -249,7 +249,7 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
               </svg>
             </button>
           </div>
-          <div className="video-time">{formattedTime} (UTC-4)</div>
+          <div className="video-time">{formattedTime} (UTC+8)</div>
         </div>
       </div>
 

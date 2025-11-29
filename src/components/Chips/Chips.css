@@ -150,8 +150,8 @@
 
 @media (max-width: 768px) {
   .chip {
-    width: 44px; /* Better touch target */
-    height: 44px;
+    width: 58px; /* Better touch target */
+    height: 52px;
   }
   
   .chip-value {

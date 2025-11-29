@@ -124,7 +124,7 @@ const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onUnd
       </div>
 
       {/* Right side - Timestamp and Menu */}
-      <div className="controls-right-group" style={{paddingLeft:"26px"}}>
+      <div className="controls-right-group" style={{paddingLeft:"10px"}}>
         <button 
           className="control-btn-circle menu"
           onClick={handleLobby}
