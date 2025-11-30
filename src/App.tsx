@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useGameStore } from './store/gameStore'
 import LiveVideo from './components/LiveVideo/LiveVideo'
 import BettingInterface from './components/BettingInterface/BettingInterface'
@@ -11,6 +11,7 @@ import './App.css'
 function App() {
   const { initializeGame, showGameSummary, setGameSummary } = useGameStore()
   const { connect, disconnect } = useWebSocket()
+  const [scoreboardVisible, setScoreboardVisible] = useState(false)
 
   useEffect(() => {
     // Initialize with default data
@@ -58,6 +59,53 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+    // In landscape: show scoreboard when user scrolls down, hide when scrolls up
+    useEffect(() => {
+      if (typeof window === 'undefined') return
+
+      const mq = window.matchMedia('(orientation: landscape)')
+      let container = document.querySelector('.app-container') as HTMLElement | null
+      let prev = container ? container.scrollTop : 0
+      const threshold = 8
+
+      const onScroll = () => {
+        if (!mq.matches) return
+        if (!container) container = document.querySelector('.app-container') as HTMLElement | null
+        const st = container ? container.scrollTop : 0
+        if (st - prev > threshold) {
+          // scrolling down -> show scoreboard
+          setScoreboardVisible(true)
+          prev = st
+        } else if (prev - st > threshold) {
+          // scrolling up -> hide scoreboard
+          setScoreboardVisible(false)
+          prev = st
+        } else {
+          prev = st
+        }
+      }
+
+      container?.addEventListener('scroll', onScroll, { passive: true })
+
+      const mqHandler = (e: MediaQueryListEvent) => {
+        if (!e.matches) {
+          setScoreboardVisible(false)
+        } else {
+          container = document.querySelector('.app-container') as HTMLElement | null
+          prev = container ? container.scrollTop : 0
+        }
+      }
+
+      if (mq.addEventListener) mq.addEventListener('change', mqHandler)
+      else mq.addListener(mqHandler)
+
+      return () => {
+        container?.removeEventListener('scroll', onScroll)
+        if (mq.removeEventListener) mq.removeEventListener('change', mqHandler)
+        else mq.removeListener(mqHandler)
+      }
+    }, [])
+
   return (
     <div className="app-container bg-casino-dark flex flex-col">
       {/* Top Section: Live Video */}
@@ -66,7 +114,7 @@ function App() {
       </div>
       
       {/* Middle Section: Game Statistics/Roadmap (Mobile) */}
-      <div className="roadmap-section-mobile bg-gradient-to-br from-casino-dark to-casino-darker">
+      <div className={`roadmap-section-mobile bg-gradient-to-br from-casino-dark to-casino-darker`}>
         {showGameSummary ? (
           <GameSummary onClose={() => setGameSummary(false)} />
         ) : (

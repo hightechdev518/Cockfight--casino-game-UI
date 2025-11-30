@@ -707,7 +707,7 @@
   .betting-area {
     padding: 0rem;
     gap: 0.25rem;
-    padding-left: 70px; /* Adjust for smaller control bar */
+    padding-left: 62px; /* Adjust for smaller control bar */
   }
 
   .main-bets {

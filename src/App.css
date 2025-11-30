@@ -105,16 +105,52 @@
     flex-direction: column;
     height: 100vh;
     max-height: 100vh;
-    overflow: hidden;
+    /* allow vertical scrolling above the pinned scoreboard */
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    /* reserve space for the pinned roadmap at the bottom */
   }
-
   .video-section {
     border-bottom: 2px solid rgba(255, 215, 0, 0.3);
     padding-left: 70px; /* Make room for vertical control bar */
   }
 
   .roadmap-section-mobile {
-    display: none; /* Hide roadmap in landscape to save space */
+    /* show scoreboard pinned to bottom in landscape */
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    z-index: 60;
+    height: 202px;
+    max-height: 202px;
+    flex: 0 0 202px;
+    box-shadow: 0 -8px 24px rgba(0,0,0,0.38);
+    background-clip: padding-box;
+    /* by default keep it hidden (slide out) until user scrolls down */
+    transform: translateY(100%);
+    transition: transform 220ms ease-in-out;
+    will-change: transform;
+    padding: 0px 6px 0px 66px;
+  }
+
+  /* when scoreboard-visible class is present, slide into view */
+  .roadmap-section-mobile.scoreboard-visible {
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+
+  /* reorder layout: video (1), betting (2), scoreboard (3) */
+  .video-section { order: 1; }
+  .betting-section-wrapper { order: 2; }
+  .roadmap-section-mobile { order: 3; }
+
+  /* make video and betting panels fill available space */
+  .video-section, .betting-section-wrapper {
+    flex: 1 1 50%;
+    min-height: 0; /* allow proper flex auto-sizing */
+    height: 100%;
   }
 
   .betting-section-wrapper {
@@ -132,7 +168,7 @@
 @media (orientation: landscape) and (max-height: 600px) {
   .video-section {
     flex: 1 1 auto;
-    min-height: 0;
+    min-height: calc(100% - 90px);
     max-height: none;
     padding-left: 60px; /* Adjust for smaller control bar */
   }

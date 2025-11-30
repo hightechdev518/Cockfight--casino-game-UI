@@ -225,7 +225,7 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
             className="roadmap-grid"
             style={{
               gridTemplateRows: `repeat(${Math.max(5, 1)}, 24px)`,
-              gridTemplateColumns: `repeat(${Math.max(14, 1)}, 24px)`,
+              gridTemplateColumns: `repeat(${Math.max(30, 1)}, 24px)`,
             }}
           >
             {/* Render roadmap items */}
