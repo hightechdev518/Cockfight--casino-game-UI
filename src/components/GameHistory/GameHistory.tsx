@@ -172,34 +172,34 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
       })
     })
 
-    // Generate solid circles for Small Road (derived from Big Road)
-    // Place them in a separate area (right side)
-    const solidStartCol = columns.length + 2
-    history.forEach((item, index) => {
-      if (item.result !== 'tie' && index > 0 && index % 3 === 0) {
-        const result = item.result as 'dragon' | 'tiger'
-        roadmap.push({
-          type: 'solid',
-          color: result === 'dragon' ? 'red' : 'yellow',
-          row: Math.floor(index / 3),
-          col: solidStartCol + Math.floor(index / 6)
-        })
-      }
-    })
+    // // Generate solid circles for Small Road (derived from Big Road)
+    // // Place them in a separate area (right side)
+    // const solidStartCol = columns.length + 2
+    // history.forEach((item, index) => {
+    //   if (item.result !== 'tie' && index > 0 && index % 3 === 0) {
+    //     const result = item.result as 'dragon' | 'tiger'
+    //     roadmap.push({
+    //       type: 'solid',
+    //       color: result === 'dragon' ? 'red' : 'yellow',
+    //       row: Math.floor(index / 3),
+    //       col: solidStartCol + Math.floor(index / 6)
+    //     })
+    //   }
+    // })
 
-    // Generate diagonal lines for Cockroach Road (another derived road)
-    const diagonalStartCol = solidStartCol + Math.floor(history.length / 6) + 2
-    history.forEach((item, index) => {
-      if (item.result !== 'tie' && index > 0 && index % 2 === 0) {
-        const result = item.result as 'dragon' | 'tiger'
-        roadmap.push({
-          type: 'diagonal',
-          color: result === 'dragon' ? 'red' : 'yellow',
-          row: Math.floor(index / 2) + 3,
-          col: diagonalStartCol + Math.floor(index / 4)
-        })
-      }
-    })
+    // // Generate diagonal lines for Cockroach Road (another derived road)
+    // const diagonalStartCol = solidStartCol + Math.floor(history.length / 6) + 2
+    // history.forEach((item, index) => {
+    //   if (item.result !== 'tie' && index > 0 && index % 2 === 0) {
+    //     const result = item.result as 'dragon' | 'tiger'
+    //     roadmap.push({
+    //       type: 'diagonal',
+    //       color: result === 'dragon' ? 'red' : 'yellow',
+    //       row: Math.floor(index / 2) + 3,
+    //       col: diagonalStartCol + Math.floor(index / 4)
+    //     })
+    //   }
+    // })
 
     // Calculate max dimensions for grid
     const maxRow = Math.max(
@@ -224,8 +224,8 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
           <div 
             className="roadmap-grid"
             style={{
-              gridTemplateRows: `repeat(${Math.max(generateRoadmap.maxRow + 1, 1)}, 24px)`,
-              gridTemplateColumns: `repeat(${Math.max(generateRoadmap.maxCol + 1, 1)}, 24px)`,
+              gridTemplateRows: `repeat(${Math.max(5, 1)}, 24px)`,
+              gridTemplateColumns: `repeat(${Math.max(14, 1)}, 24px)`,
             }}
           >
             {/* Render roadmap items */}

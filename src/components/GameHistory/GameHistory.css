@@ -60,7 +60,7 @@
   display: grid;
   grid-auto-rows: 24px;
   gap: 3px;
-  padding: 1rem;
+  padding: 0.5rem;
   width: fit-content;
   min-width: 100%;
   height: fit-content;
