@@ -272,7 +272,7 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
         </div>
 
         {/* Bottom Status Bar */}
-        <div className="roadmap-status-bar">
+        <div className="roadmap-status-bar flex justify-between items-center px-2 py-1">
           <div className="status-left">
             <span className="round-number">#{displayRound}</span>
             <div className="stat-item">
@@ -287,6 +287,9 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
               <span className="stat-circle green">D</span>
               <span className="stat-value">{gameStats.tieWins}</span>
             </div>
+          </div>
+          <div className="status-right">
+            <img src="/Button/Lobby.svg" alt="Info" className="info-icon h-[32px]" />
           </div>
         </div>
       </div>
