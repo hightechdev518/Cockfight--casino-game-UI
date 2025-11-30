@@ -250,7 +250,7 @@ const BettingInterface: React.FC = () => {
       <SuccessOverlay show={showSuccess} onClose={() => setShowSuccess(false)} />
 
       {/* Bottom Control Bar - Two rows: Top (dark gray) and Bottom (black) */}
-      <div className="bottom-control-bar flex-shrink-0">
+      <div className="bottom-control-bar flex-shrink-0" style={{overflow:"visible"}}>
         {/* Top Row: Dark Gray - Controls with Timestamp */}
         <div className="control-bar-top">
           <Controls 

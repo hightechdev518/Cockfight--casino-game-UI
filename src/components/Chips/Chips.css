@@ -140,11 +140,12 @@
 
   .chips-grid {
     gap: 0.25rem;
+    bottom: 0px;
+    left: 60px;
     flex-wrap: wrap;
-    justify-content: center;
-    position: absolute;
-    bottom: 140px;
-    left: 80;
+    display: flex;
+    flex-direction: column;
+    height: 94%;
   }
 }
 
@@ -162,7 +163,11 @@
     gap: 0.3rem; /* Better spacing */
     position: absolute;
     bottom: 140px;
-    left: 80;
+    left: 0px;
+    flex-wrap: wrap;
+    flex-direction: row;
+    justify-content: center;
+    height: 110px;
   }
   
   .chip-nav-btn {
