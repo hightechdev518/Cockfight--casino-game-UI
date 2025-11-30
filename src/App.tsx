@@ -13,6 +13,10 @@ function App() {
   const { connect, disconnect } = useWebSocket()
   const [scoreboardVisible, setScoreboardVisible] = useState(false)
 
+  if(scoreboardVisible) {
+    
+  }
+
   useEffect(() => {
     // Initialize with default data
     try {
