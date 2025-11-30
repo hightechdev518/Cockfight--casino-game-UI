@@ -150,6 +150,6 @@
   .controls-left-group,
   .controls-center-group,
   .controls-right-group {
-    gap: 0.4rem;
+    gap: 1rem;
   }
 }

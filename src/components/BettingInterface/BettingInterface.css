@@ -159,7 +159,6 @@
   margin-top: 0.25rem;
   font-size: 0.7rem;
   opacity: 0.9;
-  width: 100%;
   min-width: 0;
 }
 
@@ -461,69 +460,120 @@
   .betting-area {
     flex: 1;
     padding: 0.5rem;
-    gap: 0.3rem;
+    gap: 0.4rem;
     min-height: 0;
     overflow: hidden;
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    align-items: stretch;
     padding-left: 80px; /* Make room for vertical control bar */
   }
 
   .main-bets-top {
     gap: 0.4rem;
     margin: 0;
-    flex: 1;
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    align-items: stretch;
+    flex: none;
+    display: contents;
   }
 
   .main-bets-bottom {
     gap: 0.4rem;
     margin: 0;
-    flex: 1;
-    display: grid;
-    grid-template-columns: 1fr;
-    align-items: stretch;
+    flex: none;
+    display: contents;
   }
 
   .main-bet {
-    min-height: auto;
-    padding: 0.6rem 0.5rem;
-    font-size: 0.85rem;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    height: 100%;
+    min-height: auto !important;
+    padding: 0.6rem 0.8rem !important;
+    font-size: 0.85rem !important;
+    display: flex !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    height: 100% !important;
+    gap: 0.5rem !important;
   }
 
   .bet-label-large {
-    font-size: 2.2rem;
-    margin-bottom: 0.2rem;
-    line-height: 1;
+    font-size: 2rem !important;
+    margin-bottom: 0 !important;
+    line-height: 1 !important;
+    flex: 0 0 auto !important;
+    order: 1 !important;
   }
 
   .bet-odds {
-    font-size: 0.75rem;
-    margin-bottom: 1.2rem;
-    opacity: 0.9;
+    font-size: 1rem !important;
+    margin-bottom: 0 !important;
+    margin-right: 0 !important;
+    opacity: 0.9 !important;
+    flex: 0 0 auto !important;
+    order: 3 !important;
+    line-height: 1.2 !important;
   }
 
   .bet-stats {
-    font-size: 0.6rem;
-    gap: 0.15rem;
-    margin-top: 0.2rem;
+    font-size: 0.6rem !important;
+    gap: 0.1rem !important;
+    margin-top: 0 !important;
+    flex-direction: column !important;
+    align-items: flex-end !important;
+    justify-content: center !important;
+    flex: 0 0 auto !important;
+    order: 4 !important;
+    line-height: 1.2 !important;
   }
 
   .bet-percentage {
-    font-size: 0.8rem;
-    font-weight: bold;
+    font-size: 1.5rem !important;
+    font-weight: bold !important;
+    line-height: 1 !important;
   }
 
   .bet-amount-display {
-    font-size: 0.85rem;
-    font-weight: bold;
+    font-size: 2rem !important;
+    font-weight: bold !important;
+    line-height: 1 !important;
+  }
+
+  /* Reset Draw button styling for landscape - same as Meron and Wala */
+  .main-bets-bottom .main-bet.tie {
+    flex-direction: row !important;
+    padding: 0.6rem 0.8rem !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 0.5rem !important;
+    min-height: auto !important;
+    overflow: visible !important;
+  }
+
+  .main-bets-bottom .main-bet.tie .bet-odds {
+    margin-right: 0 !important;
+    margin-bottom: 0 !important;
+    line-height: 1.2 !important;
+    font-size: 0.7rem !important;
+    order: 3 !important;
+    flex: 0 0 auto !important;
+  }
+
+  .main-bets-bottom .main-bet.tie .bet-stats {
+    flex-direction: column !important;
+    gap: 0.1rem !important;
+    margin-top: 0 !important;
+    justify-content: center !important;
+    align-items: flex-end !important;
+    line-height: 1.2 !important;
+    order: 4 !important;
+    flex: 0 0 auto !important;
+  }
+
+  .main-bets-bottom .main-bet.tie .bet-label-large {
+    margin-left: 0 !important;
+    margin-top: 0 !important;
+    font-size: 2rem !important;
+    order: 1 !important;
+    flex: 0 0 auto !important;
   }
 
   /* Bottom Control Bar - Full height vertical on left in landscape */
@@ -565,7 +615,7 @@
 
 @media (orientation: landscape) and (max-height: 600px) {
   .betting-area {
-    padding: 0.4rem;
+    padding: 0rem;
     gap: 0.25rem;
     padding-left: 70px; /* Adjust for smaller control bar */
   }
@@ -584,8 +634,8 @@
   }
 
   .bet-odds {
-    font-size: 0.7rem;
-    margin-bottom: 0.2rem;
+    font-size: 1.2rem;
+    margin-bottom: 3.2rem;
   }
 
   .bet-stats {
@@ -595,7 +645,7 @@
   }
 
   .bet-percentage {
-    font-size: 0.7rem;
+    font-size: 2rem;
   }
 
   .bet-amount-display {
