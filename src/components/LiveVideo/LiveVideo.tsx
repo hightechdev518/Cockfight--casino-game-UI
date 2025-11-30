@@ -40,6 +40,8 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
   const [videoError, setVideoError] = useState<boolean>(false)
   const { countdown, totalBet } = useGameStore()
 
+  console.log(countdown)
+
   /**
    * Handles video error events
    */
@@ -150,11 +152,28 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
   }, [countdown])
 
   /**
+   * Determines the countdown state color based on remaining time
+   */
+  const countdownState = useMemo(() => {
+    if (countdown === undefined || countdown < 0) return 'hidden'
+    if (countdown > 15) return 'green'
+    if (countdown > 5) return 'yellow'
+    return 'red'
+  }, [countdown])
+
+  /**
+   * Determines if countdown badge should be visible
+   */
+  const isCountdownVisible = useMemo(() => {
+    return countdown !== undefined && countdown >= 0
+  }, [countdown])
+
+  /**
    * Builds styles for the circular progress bar
    */
   const progressStyles = useMemo(() => buildStyles({
-    pathColor: COUNTDOWN_CONFIG.PROGRESS_COLOR,
-    textColor: COUNTDOWN_CONFIG.PROGRESS_COLOR,
+    // pathColor: '#fff',
+    textColor: '#fff',
     trailColor: COUNTDOWN_CONFIG.TRAIL_COLOR,
     textSize: COUNTDOWN_CONFIG.TEXT_SIZE,
     pathTransition: 'stroke-dashoffset 0.5s linear',
@@ -254,8 +273,8 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
       </div>
 
       {/* Countdown Badge */}
-      {countdown !== undefined && (
-        <div className="countdown-badge" role="timer" aria-live="polite" aria-label={`Countdown: ${countdown}`}>
+      {isCountdownVisible && (
+        <div className={`countdown-badge ${countdownState}`} role="timer" aria-live="polite" aria-label={`Countdown: ${countdown}`}>
           <CircularProgressbar
             value={progressPercentage}
             text={`${countdown}`}

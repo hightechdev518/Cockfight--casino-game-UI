@@ -234,17 +234,53 @@
   height: 120px;
   z-index: 20;
   pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.3s ease;
 }
 
-.countdown-badge .CircularProgressbar {
-  filter: drop-shadow(0 0 8px rgba(0, 255, 136, 0.8));
+.countdown-badge.hidden {
+  opacity: 0;
+  pointer-events: none;
 }
 
-.countdown-badge .CircularProgressbar .CircularProgressbar-text {
+/* Green state: 15-20 seconds */
+.countdown-badge.green .CircularProgressbar-path {
+  stroke: #00ff88;
+}
+
+.countdown-badge.green .CircularProgressbar-text {
+  fill: #00ff88;
   font-weight: 900;
-  text-shadow: 0 0 15px rgba(0, 255, 136, 0.8), 0 0 30px rgba(0, 255, 136, 0.5);
   dominant-baseline: middle;
   text-anchor: middle;
+}
+
+/* Yellow state: 5-15 seconds */
+.countdown-badge.yellow .CircularProgressbar-path {
+  stroke: #ffff00;
+}
+
+.countdown-badge.yellow .CircularProgressbar-text {
+  fill: #ffff00;
+  font-weight: 900;
+  dominant-baseline: middle;
+  text-anchor: middle;
+}
+
+/* Red state: 0-5 seconds */
+.countdown-badge.red .CircularProgressbar-path {
+  stroke: #ff0000;
+}
+
+.countdown-badge.red .CircularProgressbar-text {
+  fill: #ff0000;
+  font-weight: 900;
+  dominant-baseline: middle;
+  text-anchor: middle;
+}
+
+.countdown-badge .CircularProgressbar-trail {
+  stroke: rgba(255, 255, 255, 0.1);
 }
 
 

@@ -59,7 +59,7 @@ const initialState: GameState = {
   gameHistory: [],
   connectionStatus: 'disconnected',
   currentRound: 40,
-  countdown: 10
+  countdown: 20
 }
 
 export const useGameStore = create<GameStore>((set) => ({
