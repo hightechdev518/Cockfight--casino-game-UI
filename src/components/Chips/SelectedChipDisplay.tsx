@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useGameStore } from '../../store/gameStore'
 import './Chips.css'
 
-const CHIP_VALUES = [10, 20, 50, 100, 200, 500, 1000, 5000, 10000,50000]
+const CHIP_VALUES = [1,5,10, 20, 50, 100, 200, 500, 1000, 5000, 10000,50000]
 
 const getChipSVG = (value: number) => `/${value}.svg`
 
