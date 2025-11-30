@@ -27,7 +27,7 @@ const GRID_CONFIG = {
  * @returns JSX element
  */
 const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
-  const { gameHistory, autoSubmit, toggleAutoSubmit, currentRound } = useGameStore()
+  const { gameHistory, autoSubmit, toggleAutoSubmit, currentRound, toggleGameSummary } = useGameStore()
 
   /**
    * Generates sample history data matching the exact image pattern
@@ -272,7 +272,7 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
         </div>
 
         {/* Bottom Status Bar */}
-        <div className="roadmap-status-bar flex justify-between items-center px-2 py-1">
+        <div className="roadmap-status-bar flex justify-around items-center px-2 py-1">
           <div className="status-left">
             <span className="round-number">#{displayRound}</span>
             <div className="stat-item">
@@ -289,7 +289,13 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
             </div>
           </div>
           <div className="status-right">
+            <button
+            onClick={toggleGameSummary}
+            className="summary-toggle-btn"
+            title="Switch to Game Summary"
+          >
             <img src="/Button/Lobby.svg" alt="Info" className="info-icon h-[32px]" />
+          </button>
           </div>
         </div>
       </div>

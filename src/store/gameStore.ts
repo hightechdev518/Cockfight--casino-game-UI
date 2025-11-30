@@ -30,6 +30,7 @@ export interface GameState {
   connectionStatus: 'connected' | 'disconnected' | 'connecting'
   currentRound?: number
   countdown?: number
+  showGameSummary: boolean
 }
 
 interface GameStore extends GameState {
@@ -45,6 +46,8 @@ interface GameStore extends GameState {
   addGameHistory: (history: GameHistory) => void
   setConnectionStatus: (status: GameState['connectionStatus']) => void
   setAccountBalance: (balance: number) => void
+  toggleGameSummary: () => void
+  setGameSummary: (show: boolean) => void
 }
 
 const initialState: GameState = {
@@ -59,7 +62,8 @@ const initialState: GameState = {
   gameHistory: [],
   connectionStatus: 'disconnected',
   currentRound: 40,
-  countdown: 20
+  countdown: 20,
+  showGameSummary: false
 }
 
 export const useGameStore = create<GameStore>((set) => ({
@@ -98,5 +102,9 @@ export const useGameStore = create<GameStore>((set) => ({
   
   setConnectionStatus: (status) => set({ connectionStatus: status }),
   
-  setAccountBalance: (balance) => set({ accountBalance: balance })
+  setAccountBalance: (balance) => set({ accountBalance: balance }),
+
+  toggleGameSummary: () => set((state) => ({ showGameSummary: !state.showGameSummary })),
+
+  setGameSummary: (show) => set({ showGameSummary: show })
 }))

@@ -3,12 +3,13 @@ import { useGameStore } from './store/gameStore'
 import LiveVideo from './components/LiveVideo/LiveVideo'
 import BettingInterface from './components/BettingInterface/BettingInterface'
 import GameHistory from './components/GameHistory/GameHistory'
+import GameSummary from './components/GameHistory/GameSummary'
 import { useWebSocket } from './hooks/useWebSocket'
 import { apiService } from './services/apiService'
 import './App.css'
 
 function App() {
-  const { initializeGame } = useGameStore()
+  const { initializeGame, showGameSummary, setGameSummary } = useGameStore()
   const { connect, disconnect } = useWebSocket()
 
   useEffect(() => {
@@ -66,7 +67,11 @@ function App() {
       
       {/* Middle Section: Game Statistics/Roadmap (Mobile) */}
       <div className="roadmap-section-mobile bg-gradient-to-br from-casino-dark to-casino-darker">
-        <GameHistory variant="detailed" />
+        {showGameSummary ? (
+          <GameSummary onClose={() => setGameSummary(false)} />
+        ) : (
+          <GameHistory variant="detailed" />
+        )}
         </div>
       
       {/* Bottom Section: Betting Interface */}
