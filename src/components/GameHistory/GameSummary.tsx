@@ -11,7 +11,7 @@ interface GameSummaryProps {
  * Shows 6 game cards with name, round number, status, and open count
  */
 const GameSummary: React.FC<GameSummaryProps> = ({ onClose }) => {
-  const { gameHistory, currentRound } = useGameStore()
+  const { gameHistory} = useGameStore()
 
   /**
    * Generates sample game data for display
@@ -44,16 +44,6 @@ const GameSummary: React.FC<GameSummaryProps> = ({ onClose }) => {
     }
     return generateSampleGames()
   }, [gameHistory, generateSampleGames])
-
-  /**
-   * Gets status color based on result
-   */
-  const getStatusColor = useCallback((status: string): string => {
-    if (status.includes('Dragon')) return 'text-red-500'
-    if (status.includes('Tiger')) return 'text-yellow-400'
-    if (status.includes('Draw')) return 'text-green-500'
-    return 'text-gray-400'
-  }, [])
 
   /**
    * Gets background color for status
