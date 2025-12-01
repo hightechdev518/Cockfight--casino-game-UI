@@ -32,6 +32,8 @@ const BET_ODDS: Readonly<Record<BetType, number>> = {
 const BettingInterface: React.FC = () => {
   const { selectedChip, addBet, clearBets } = useGameStore()
   const [pendingBets, setPendingBets] = useState<Map<BetType, number>>(new Map())
+  // Track which bet type is currently active (locked in) - only one panel can be bet at a time
+  const [activeBetType, setActiveBetType] = useState<BetType | null>(null)
   const [flyingChips, setFlyingChips] = useState<Array<{
     id: string
     chipValue: number
@@ -58,6 +60,14 @@ const BettingInterface: React.FC = () => {
    */
   const handleBetClick = useCallback((betType: BetType) => {
     if (selectedChip <= 0) return
+    
+    // If there's an active bet type and it's different from this one, block the bet
+    if (activeBetType !== null && activeBetType !== betType) return
+
+    // Set this as the active bet type if not already set
+    if (activeBetType === null) {
+      setActiveBetType(betType)
+    }
 
     setPendingBets((prevBets) => {
       const currentAmount = prevBets.get(betType) || 0
@@ -91,7 +101,7 @@ const BettingInterface: React.FC = () => {
         setFlyingChips((prev) => [...prev, newFlyingChip])
       }
     }
-  }, [selectedChip])
+  }, [selectedChip, activeBetType])
 
   /**
    * Confirms and submits all pending bets
@@ -109,6 +119,8 @@ const BettingInterface: React.FC = () => {
       }
     })
     setPendingBets(new Map())
+    // Reset the active bet type after confirming
+    setActiveBetType(null)
     // Show success overlay briefly
     setShowSuccess(true)
     if (successTimerRef.current) {
@@ -125,6 +137,8 @@ const BettingInterface: React.FC = () => {
    */
   const handleClearBets = useCallback(() => {
     setPendingBets(new Map())
+    // Reset the active bet type after clearing
+    setActiveBetType(null)
     clearBets()
   }, [clearBets])
 
@@ -189,8 +203,9 @@ const BettingInterface: React.FC = () => {
         <div className="main-bets-top flex-1">
           <button 
             ref={(el) => el && (betButtonRefs.current.dragon = el)}
-            className="bet-button main-bet dragon"
+            className={`bet-button main-bet dragon ${activeBetType !== null && activeBetType !== 'dragon' ? 'disabled' : ''}`}
             onClick={() => handleBetClick('dragon')}
+            disabled={activeBetType !== null && activeBetType !== 'dragon'}
           >
             <span className="bet-label-large">Meron</span>
             <span className="bet-odds">1:1</span>
@@ -201,8 +216,9 @@ const BettingInterface: React.FC = () => {
           </button>
           <button 
             ref={(el) => el && (betButtonRefs.current.tiger = el)}
-            className="bet-button main-bet tiger"
+            className={`bet-button main-bet tiger ${activeBetType !== null && activeBetType !== 'tiger' ? 'disabled' : ''}`}
             onClick={() => handleBetClick('tiger')}
+            disabled={activeBetType !== null && activeBetType !== 'tiger'}
           >
             <span className="bet-label-large">Wala</span>
             <span className="bet-odds">1:1</span>
@@ -217,8 +233,9 @@ const BettingInterface: React.FC = () => {
         <div className="main-bets-bottom flex-1">
           <button 
             ref={(el) => el && (betButtonRefs.current.tie = el)}
-            className="bet-button main-bet tie"
+            className={`bet-button main-bet tie ${activeBetType !== null && activeBetType !== 'tie' ? 'disabled' : ''}`}
             onClick={() => handleBetClick('tie')}
+            disabled={activeBetType !== null && activeBetType !== 'tie'}
           >
             <span className="bet-label-large">Draw</span>
             <span className="bet-odds">1:8</span>
@@ -264,6 +281,10 @@ const BettingInterface: React.FC = () => {
                 setPendingBets(prev => {
                   const newBets = new Map(prev)
                   newBets.delete(lastBet[0])
+                  // If no more bets, reset the active bet type
+                  if (newBets.size === 0) {
+                    setActiveBetType(null)
+                  }
                   return newBets
                 })
               }
