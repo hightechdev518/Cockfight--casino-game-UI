@@ -36,29 +36,29 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
   const generateSampleHistory = useCallback((): GameHistoryType[] => {
     // Pattern from the image: 6 rows x 12 columns = 72 cells
     // Exact pattern matching the image:
-    // Row 1: 5 tiger, 2 dragon, 1 tiger
-    // Row 2: 1 dragon, 2 tiger, 1 dragon, 2 tiger
-    // Row 3: 4 dragon, 2 tiger
-    // Row 4: 2 tiger, 2 dragon, 1 tiger, 2 dragon
-    // Row 5: 2 tiger, 1 dragon, 1 tiger, 2 dragon
-    // Row 6: 1 dragon, 1 tiger, 1 dragon, 1 tie, 2 dragon
+    // Row 1: 5 wala, 2 meron, 1 wala
+    // Row 2: 1 meron, 2 wala, 1 meron, 2 wala
+    // Row 3: 4 meron, 2 wala
+    // Row 4: 2 wala, 2 meron, 1 wala, 2 meron
+    // Row 5: 2 wala, 1 meron, 1 wala, 2 meron
+    // Row 6: 1 meron, 1 wala, 1 meron, 1 draw, 2 meron
     const pattern = [
-      'tiger', 'tiger', 'tiger', 'tiger', 'tiger', 'dragon', 'dragon', 'tiger',
-      'dragon', 'tiger', 'tiger', 'dragon', 'tiger', 'tiger',
-      'dragon', 'dragon', 'dragon', 'dragon', 'tiger', 'tiger',
-      'tiger', 'tiger', 'dragon', 'dragon', 'tiger', 'dragon', 'dragon',
-      'tiger', 'tiger', 'dragon', 'tiger', 'tiger', 'dragon', 'dragon',
-      'dragon', 'tiger', 'dragon', 'tie', 'dragon', 'dragon'
+      'wala', 'wala', 'wala', 'wala', 'wala', 'meron', 'meron', 'wala',
+      'meron', 'wala', 'wala', 'meron', 'wala', 'wala',
+      'meron', 'meron', 'meron', 'meron', 'wala', 'wala',
+      'wala', 'wala', 'meron', 'meron', 'wala', 'meron', 'meron',
+      'wala', 'wala', 'meron', 'wala', 'wala', 'meron', 'meron',
+      'meron', 'wala', 'meron', 'draw', 'meron', 'meron'
     ]
     // Generate more items for scrolling (at least 40 items for 4 columns = 10 rows)
     const baseItems = pattern.map((result, i) => ({
       round: i + 1,
-      result: result as 'dragon' | 'tiger' | 'tie'
+      result: result as 'meron' | 'wala' | 'draw'
     }))
     // Add more items to ensure scrolling works
     const additionalItems: GameHistoryType[] = []
     for (let i = baseItems.length; i < 40; i++) {
-      const results: ('dragon' | 'tiger' | 'tie')[] = ['dragon', 'tiger', 'tiger', 'dragon', 'tiger']
+      const results: ('meron' | 'wala' | 'draw')[] = ['meron', 'wala', 'wala', 'meron', 'wala']
       additionalItems.push({
         round: i + 1,
         result: results[i % results.length]
@@ -81,9 +81,9 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
    */
   const getResultChar = useCallback((result: string): string => {
     switch (result) {
-      case 'dragon': return '龍'
-      case 'tiger': return '虎'
-      case 'tie': return '和'
+      case 'meron': return '龍'
+      case 'wala': return '虎'
+      case 'draw': return '和'
       default: return ''
     }
   }, [])
@@ -95,9 +95,9 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
    */
   const getResultColor = useCallback((result: string): string => {
     switch (result) {
-      case 'dragon': return 'red'
-      case 'tiger': return 'yellow'
-      case 'tie': return 'green'
+      case 'meron': return 'red'
+      case 'wala': return 'yellow'
+      case 'draw': return 'green'
       default: return 'empty'
     }
   }, [])
@@ -106,10 +106,10 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
    * Calculates game statistics from history
    */
   const gameStats = useMemo(() => {
-    const dragonWins = history.filter(h => h.result === 'dragon').length
-    const tigerWins = history.filter(h => h.result === 'tiger').length
-    const tieWins = history.filter(h => h.result === 'tie').length
-    return { dragonWins, tigerWins, tieWins }
+    const meronWins = history.filter(h => h.result === 'meron').length
+    const walaWins = history.filter(h => h.result === 'wala').length
+    const drawWins = history.filter(h => h.result === 'draw').length
+    return { meronWins, walaWins, drawWins }
   }, [history])
 
   /**
@@ -129,17 +129,17 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
       color: 'red' | 'yellow' | 'green'
       row: number
       col: number
-      hasMark?: boolean // For diagonal line marks on ties
+      hasMark?: boolean // For diagonal line marks on draws
     }> = []
 
     // Big Road algorithm: columns change when result alternates
-    const columns: Array<Array<{ result: 'dragon' | 'tiger', isTie: boolean }>> = []
+    const columns: Array<Array<{ result: 'meron' | 'wala', isdraw: boolean }>> = []
     let currentCol = -1
-    let lastResult: 'dragon' | 'tiger' | null = null
+    let lastResult: 'meron' | 'wala' | null = null
 
     // Build Big Road columns
     history.forEach((item) => {
-      if (item.result === 'tie') {
+      if (item.result === 'draw') {
         // Mark the last item in current column with a diagonal mark
         if (currentCol >= 0 && columns[currentCol].length > 0) {
           const lastItem = roadmap[roadmap.length - 1]
@@ -150,15 +150,15 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
         return
       }
 
-      const result = item.result as 'dragon' | 'tiger'
+      const result = item.result as 'meron' | 'wala'
       
       // New column if result changes or first item
       if (lastResult === null || lastResult !== result) {
-        columns.push([{ result, isTie: false }])
+        columns.push([{ result, isdraw: false }])
         currentCol = columns.length - 1
       } else {
         // Continue in same column
-        columns[currentCol].push({ result, isTie: false })
+        columns[currentCol].push({ result, isdraw: false })
       }
 
       lastResult = result
@@ -166,7 +166,7 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
       // Add outlined circle
       roadmap.push({
         type: 'outlined',
-        color: result === 'dragon' ? 'red' : 'yellow',
+        color: result === 'meron' ? 'red' : 'yellow',
         row: columns[currentCol].length - 1,
         col: currentCol
       })
@@ -176,11 +176,11 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
     // // Place them in a separate area (right side)
     // const solidStartCol = columns.length + 2
     // history.forEach((item, index) => {
-    //   if (item.result !== 'tie' && index > 0 && index % 3 === 0) {
-    //     const result = item.result as 'dragon' | 'tiger'
+    //   if (item.result !== 'draw' && index > 0 && index % 3 === 0) {
+    //     const result = item.result as 'meron' | 'wala'
     //     roadmap.push({
     //       type: 'solid',
-    //       color: result === 'dragon' ? 'red' : 'yellow',
+    //       color: result === 'meron' ? 'red' : 'yellow',
     //       row: Math.floor(index / 3),
     //       col: solidStartCol + Math.floor(index / 6)
     //     })
@@ -190,11 +190,11 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
     // // Generate diagonal lines for Cockroach Road (another derived road)
     // const diagonalStartCol = solidStartCol + Math.floor(history.length / 6) + 2
     // history.forEach((item, index) => {
-    //   if (item.result !== 'tie' && index > 0 && index % 2 === 0) {
-    //     const result = item.result as 'dragon' | 'tiger'
+    //   if (item.result !== 'draw' && index > 0 && index % 2 === 0) {
+    //     const result = item.result as 'meron' | 'wala'
     //     roadmap.push({
     //       type: 'diagonal',
-    //       color: result === 'dragon' ? 'red' : 'yellow',
+    //       color: result === 'meron' ? 'red' : 'yellow',
     //       row: Math.floor(index / 2) + 3,
     //       col: diagonalStartCol + Math.floor(index / 4)
     //     })
@@ -277,15 +277,15 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
             <span className="round-number">#{displayRound}</span>
             <div className="stat-item">
               <span className="stat-circle red">M</span>
-              <span className="stat-value">{gameStats.dragonWins}</span>
+              <span className="stat-value">{gameStats.meronWins}</span>
             </div>
             <div className="stat-item">
               <span className="stat-circle yellow">W</span>
-              <span className="stat-value">{gameStats.tigerWins}</span>
+              <span className="stat-value">{gameStats.walaWins}</span>
             </div>
             <div className="stat-item">
               <span className="stat-circle green">D</span>
-              <span className="stat-value">{gameStats.tieWins}</span>
+              <span className="stat-value">{gameStats.drawWins}</span>
             </div>
           </div>
           <div className="status-right">

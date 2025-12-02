@@ -195,7 +195,7 @@
   background: #1A1A7A;
 }
 
-/* Diagonal Mark (for ties) */
+/* Diagonal Mark (for draws) */
 .diagonal-mark {
   position: absolute;
   width: 60%;
@@ -417,15 +417,15 @@
   flex-shrink: 0;
 }
 
-.history-header .dragon-stats {
+.history-header .meron-stats {
   color: #ff4444;
 }
 
-.history-header .tiger-stats {
+.history-header .wala-stats {
   color: #ffd700;
 }
 
-.history-header .tie-stats {
+.history-header .draw-stats {
   color: #00cc66;
 }
 

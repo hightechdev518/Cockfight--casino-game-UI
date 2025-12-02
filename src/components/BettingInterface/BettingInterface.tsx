@@ -11,21 +11,21 @@ import './BettingInterface.css'
  * Betting odds configuration for each bet type
  */
 const BET_ODDS: Readonly<Record<BetType, number>> = {
-  dragon: 1.0,
-  tiger: 1.0,
-  tie: 8.0,
-  dragonRed: 0.9,
-  dragonBlack: 0.9,
-  tigerRed: 0.9,
-  tigerBlack: 0.9,
-  dragonOdd: 0.75,
-  dragonEven: 1.05,
-  tigerOdd: 0.75,
-  tigerEven: 1.05
+  meron: 1.0,
+  wala: 1.0,
+  draw: 8.0,
+  meronRed: 0.9,
+  meronBlack: 0.9,
+  walaRed: 0.9,
+  walaBlack: 0.9,
+  meronOdd: 0.75,
+  meronEven: 1.05,
+  walaOdd: 0.75,
+  walaEven: 1.05
 } as const
 
 /**
- * BettingInterface component provides the main betting interface for Dragon Tiger game
+ * BettingInterface component provides the main betting interface for meron wala game
  * 
  * @returns JSX element
  */
@@ -202,29 +202,29 @@ const BettingInterface: React.FC = () => {
         {/* Main Bets - Top row: Meron and Wala side by side */}
         <div className="main-bets-top flex-1">
           <button 
-            ref={(el) => el && (betButtonRefs.current.dragon = el)}
-            className={`bet-button main-bet dragon ${activeBetType !== null && activeBetType !== 'dragon' ? 'disabled' : ''}`}
-            onClick={() => handleBetClick('dragon')}
-            disabled={activeBetType !== null && activeBetType !== 'dragon'}
+            ref={(el) => el && (betButtonRefs.current.meron = el)}
+            className={`bet-button main-bet meron ${activeBetType !== null && activeBetType !== 'meron' ? 'disabled' : ''}`}
+            onClick={() => handleBetClick('meron')}
+            disabled={activeBetType !== null && activeBetType !== 'meron'}
           >
             <span className="bet-label-large">Meron</span>
             <span className="bet-odds">1:1</span>
             <div className="bet-stats">
-              <span className="bet-percentage">{getBetPercentage('dragon')}</span>
-              <span className="bet-amount-display">${getBetAmount('dragon')}</span>
+              <span className="bet-percentage">{getBetPercentage('meron')}</span>
+              <span className="bet-amount-display">${getBetAmount('meron')}</span>
             </div>
           </button>
           <button 
-            ref={(el) => el && (betButtonRefs.current.tiger = el)}
-            className={`bet-button main-bet tiger ${activeBetType !== null && activeBetType !== 'tiger' ? 'disabled' : ''}`}
-            onClick={() => handleBetClick('tiger')}
-            disabled={activeBetType !== null && activeBetType !== 'tiger'}
+            ref={(el) => el && (betButtonRefs.current.wala = el)}
+            className={`bet-button main-bet wala ${activeBetType !== null && activeBetType !== 'wala' ? 'disabled' : ''}`}
+            onClick={() => handleBetClick('wala')}
+            disabled={activeBetType !== null && activeBetType !== 'wala'}
           >
             <span className="bet-label-large">Wala</span>
             <span className="bet-odds">1:1</span>
             <div className="bet-stats">
-              <span className="bet-percentage">{getBetPercentage('tiger')}</span>
-              <span className="bet-amount-display">${getBetAmount('tiger')}</span>
+              <span className="bet-percentage">{getBetPercentage('wala')}</span>
+              <span className="bet-amount-display">${getBetAmount('wala')}</span>
             </div>
           </button>
         </div>
@@ -232,16 +232,16 @@ const BettingInterface: React.FC = () => {
         {/* Bottom row: Draw centered */}
         <div className="main-bets-bottom flex-1">
           <button 
-            ref={(el) => el && (betButtonRefs.current.tie = el)}
-            className={`bet-button main-bet tie ${activeBetType !== null && activeBetType !== 'tie' ? 'disabled' : ''}`}
-            onClick={() => handleBetClick('tie')}
-            disabled={activeBetType !== null && activeBetType !== 'tie'}
+            ref={(el) => el && (betButtonRefs.current.draw = el)}
+            className={`bet-button main-bet draw ${activeBetType !== null && activeBetType !== 'draw' ? 'disabled' : ''}`}
+            onClick={() => handleBetClick('draw')}
+            disabled={activeBetType !== null && activeBetType !== 'draw'}
           >
             <span className="bet-label-large">Draw</span>
             <span className="bet-odds">1:8</span>
             <div className="bet-stats">
-              <span className="bet-percentage">{getBetPercentage('tie')}</span>
-              <span className="bet-amount-display">${getBetAmount('tie')}</span>
+              <span className="bet-percentage">{getBetPercentage('draw')}</span>
+              <span className="bet-amount-display">${getBetAmount('draw')}</span>
             </div>
           </button>
         </div>

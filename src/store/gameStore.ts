@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export type BetType = 'dragon' | 'tiger' | 'tie' | 'dragonRed' | 'dragonBlack' | 'tigerRed' | 'tigerBlack' | 'dragonOdd' | 'dragonEven' | 'tigerOdd' | 'tigerEven'
+export type BetType = 'meron' | 'wala' | 'draw' | 'meronRed' | 'meronBlack' | 'walaRed' | 'walaBlack' | 'meronOdd' | 'meronEven' | 'walaOdd' | 'walaEven'
 
 export interface Bet {
   id: string
@@ -12,9 +12,9 @@ export interface Bet {
 
 export interface GameHistory {
   round: number
-  result: 'dragon' | 'tiger' | 'tie'
-  dragonCard?: { suit: 'red' | 'black', value: number }
-  tigerCard?: { suit: 'red' | 'black', value: number }
+  result: 'meron' | 'wala' | 'draw'
+  meronCard?: { suit: 'red' | 'black', value: number }
+  walaCard?: { suit: 'red' | 'black', value: number }
 }
 
 export interface GameState {
