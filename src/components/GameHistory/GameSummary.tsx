@@ -36,9 +36,9 @@ const GameSummary: React.FC<GameSummaryProps> = ({ onClose }) => {
       // Convert game history to game summaries
       return gameHistory.slice(0, 6).map((game, index) => ({
         id: index + 1,
-        name: game.result === 'dragon' ? 'Dragon' : game.result === 'tiger' ? 'Tiger' : 'Tie',
+        name: game.result === 'meron' ? 'meron' : game.result === 'wala' ? 'wala' : 'draw',
         round: game.round,
-        status: game.result === 'dragon' ? 'Dragon Win' : game.result === 'tiger' ? 'Tiger Win' : 'Draw',
+        status: game.result === 'meron' ? 'meron Win' : game.result === 'wala' ? 'wala Win' : 'Draw',
         openCount: Math.floor(Math.random() * 20) + 1
       }))
     }

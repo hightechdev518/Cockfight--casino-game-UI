@@ -99,23 +99,23 @@
   overflow: hidden;
 }
 
-.main-bet.dragon {
+.main-bet.meron {
   background: #CC0000 ;
   color: #C0C0C0;
 }
 
-.main-bet.tiger {
+.main-bet.wala {
   background: #1A1A7A;
   color: #C0C0C0;
 }
 
-.main-bet.tie {
+.main-bet.draw {
   background: #007A3D;
   color: #C0C0C0;
 }
 
 /* Draw button in bottom row - custom layout */
-.main-bets-bottom .main-bet.tie {
+.main-bets-bottom .main-bet.draw {
   min-height: auto;
   flex-direction: row;
   align-items: center;
@@ -125,14 +125,14 @@
 }
 
 /* Left side: odds, percentage, amount in a row */
-.main-bets-bottom .main-bet.tie .bet-odds {
+.main-bets-bottom .main-bet.draw .bet-odds {
   order: 1.3;
   font-size: 1rem;
   margin-right: 1.5rem;
   flex-shrink: 0;
 }
 
-.main-bets-bottom .main-bet.tie .bet-stats {
+.main-bets-bottom .main-bet.draw .bet-stats {
   order: 2;
   flex-direction: row;
   gap: 1rem;
@@ -143,7 +143,7 @@
 }
 
 /* Right side: draw text */
-.main-bets-bottom .main-bet.tie .bet-label-large {
+.main-bets-bottom .main-bet.draw .bet-label-large {
   order: 3;
   margin-bottom: 0;
   margin-left: auto;
@@ -200,26 +200,26 @@
   padding: 0.5rem 0.35rem;
 }
 
-.side-bet.dragon-red,
-.side-bet.tiger-red {
+.side-bet.meron-red,
+.side-bet.wala-red {
   background: rgba(220, 20, 60, 0.25);
   color: #ff6b6b;
 }
 
-.side-bet.dragon-black,
-.side-bet.tiger-black {
+.side-bet.meron-black,
+.side-bet.wala-black {
   background: rgba(30, 30, 30, 0.6);
   color: #b8b8b8;
 }
 
-.side-bet.dragon-odd,
-.side-bet.tiger-odd {
+.side-bet.meron-odd,
+.side-bet.wala-odd {
   background: rgba(255, 193, 7, 0.25);
   color: #ffd700;
 }
 
-.side-bet.dragon-even,
-.side-bet.tiger-even {
+.side-bet.meron-even,
+.side-bet.wala-even {
   background: rgba(0, 255, 136, 0.25);
   color: #00ff88;
 }
@@ -492,16 +492,16 @@
     display: contents;
   }
 
-  /* Reorder buttons in landscape: Meron (dragon) | Draw (tie) | Wala (tiger) */
-  .main-bet.dragon {
+  /* Reorder buttons in landscape: Meron (meron) | Draw (draw) | Wala (wala) */
+  .main-bet.meron {
     order: 1 !important;
   }
 
-  .main-bet.tie {
+  .main-bet.draw {
     order: 2 !important;
   }
 
-  .main-bet.tiger {
+  .main-bet.wala {
     order: 3 !important;
   }
 
@@ -560,7 +560,7 @@
   }
 
   /* Reset Draw button styling for landscape - same as Meron and Wala */
-  .main-bets-bottom .main-bet.tie {
+  .main-bets-bottom .main-bet.draw {
     flex-direction: row !important;
     padding: 0.6rem 0.8rem !important;
     align-items: center !important;
@@ -570,7 +570,7 @@
     overflow: visible !important;
   }
 
-  .main-bets-bottom .main-bet.tie .bet-odds {
+  .main-bets-bottom .main-bet.draw .bet-odds {
     margin-right: 0 !important;
     margin-bottom: 0 !important;
     line-height: 1.2 !important;
@@ -579,7 +579,7 @@
     flex: 0 0 auto !important;
   }
 
-  .main-bets-bottom .main-bet.tie .bet-stats {
+  .main-bets-bottom .main-bet.draw .bet-stats {
     flex-direction: column !important;
     gap: 0.1rem !important;
     margin-top: 0 !important;
@@ -590,7 +590,7 @@
     flex: 0 0 auto !important;
   }
 
-  .main-bets-bottom .main-bet.tie .bet-label-large {
+  .main-bets-bottom .main-bet.draw .bet-label-large {
     margin-left: 0 !important;
     margin-top: 0 !important;
     font-size: 2rem !important;

@@ -37,7 +37,7 @@ const FlyingChip: React.FC<FlyingChipProps> = ({
         '--start-y': `${startY}px`,
         '--end-x': `${endX}px`,
         '--end-y': `${endY}px`,
-      } as React.CSSProperties & Record<string, string>}
+      } as React.CSSProperdraws & Record<string, string>}
     >
       <div className="flying-chip-inner animate">
         <img

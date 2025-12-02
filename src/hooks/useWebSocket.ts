@@ -50,8 +50,8 @@ export const useWebSocket = () => {
                 const history: GameHistory = {
                   round: data.payload.round || 0,
                   result: data.payload.result,
-                  dragonCard: data.payload.dragonCard,
-                  tigerCard: data.payload.tigerCard
+                  meronCard: data.payload.meronCard,
+                  walaCard: data.payload.walaCard
                 }
                 addGameHistory(history)
               }
