@@ -1,5 +1,6 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useEffect, useRef, useState } from 'react'
 import { useGameStore, GameHistory as GameHistoryType } from '../../store/gameStore'
+import { apiService, sessionManager } from '../../services/apiService'
 import './GameHistory.css'
 
 /**
@@ -11,263 +12,411 @@ interface GameHistoryProps {
 }
 
 /**
- * Constants for game history
+ * Constants for game history - Bead Road Grid
  */
 const GRID_CONFIG = {
-  SIMPLE_ROWS: 6,
-  SIMPLE_COLS: 12,
-  DETAILED_COLS: 4,
-  DETAILED_ITEMS: 16,
+  ROWS: 6,           // 6 rows for bead road
+  MAX_COLS: 30,      // Maximum columns to display
 } as const
 
 /**
- * GameHistory component displays past game results in a grid format
+ * Bead Road Item - represents a single result in the road
+ */
+interface BeadRoadItem {
+  result: 'meron' | 'wala' | 'draw'
+  round: number
+  col: number
+  row: number
+}
+
+/**
+ * GameHistory component displays past game results in a bead road format
+ * - Red rings for Meron wins
+ * - Blue rings for Wala wins
+ * - Green rings for Draw
+ * - Same consecutive results stack vertically
+ * - Different results start a new column
  * 
  * @param props - Component props
  * @returns JSX element
  */
 const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
-  const { gameHistory, autoSubmit, toggleAutoSubmit, currentRound, toggleGameSummary } = useGameStore()
+  const { gameHistory, autoSubmit, toggleAutoSubmit, currentRound, toggleGameSummary, tableId, setGameHistory } = useGameStore()
+  const lastFetchTimeRef = useRef(0)
+  const [accuStats, setAccuStats] = useState<{ meronWins: number; walaWins: number; drawWins: number }>({
+    meronWins: 0,
+    walaWins: 0,
+    drawWins: 0
+  })
+  const [apiRound, setApiRound] = useState<number | null>(null)
+  const roadmapContainerRef = useRef<HTMLDivElement>(null)
 
   /**
-   * Generates sample history data matching the exact image pattern
-   * @returns Array of game history items
+   * Parses API response and converts to GameHistory format
+   * According to backend README: Returns drawresult:{tableid} plus accu, roadmap, goodroad, and allgr
    */
-  const generateSampleHistory = useCallback((): GameHistoryType[] => {
-    // Pattern from the image: 6 rows x 12 columns = 72 cells
-    // Exact pattern matching the image:
-    // Row 1: 5 wala, 2 meron, 1 wala
-    // Row 2: 1 meron, 2 wala, 1 meron, 2 wala
-    // Row 3: 4 meron, 2 wala
-    // Row 4: 2 wala, 2 meron, 1 wala, 2 meron
-    // Row 5: 2 wala, 1 meron, 1 wala, 2 meron
-    // Row 6: 1 meron, 1 wala, 1 meron, 1 draw, 2 meron
-    const pattern = [
-      'wala', 'wala', 'wala', 'wala', 'wala', 'meron', 'meron', 'wala',
-      'meron', 'wala', 'wala', 'meron', 'wala', 'wala',
-      'meron', 'meron', 'meron', 'meron', 'wala', 'wala',
-      'wala', 'wala', 'meron', 'meron', 'wala', 'meron', 'meron',
-      'wala', 'wala', 'meron', 'wala', 'wala', 'meron', 'meron',
-      'meron', 'wala', 'meron', 'draw', 'meron', 'meron'
-    ]
-    // Generate more items for scrolling (at least 40 items for 4 columns = 10 rows)
-    const baseItems = pattern.map((result, i) => ({
-      round: i + 1,
-      result: result as 'meron' | 'wala' | 'draw'
-    }))
-    // Add more items to ensure scrolling works
-    const additionalItems: GameHistoryType[] = []
-    for (let i = baseItems.length; i < 40; i++) {
-      const results: ('meron' | 'wala' | 'draw')[] = ['meron', 'wala', 'wala', 'meron', 'wala']
-      additionalItems.push({
-        round: i + 1,
-        result: results[i % results.length]
-      })
+  const parseApiHistory = useCallback((apiData: any): GameHistoryType[] => {
+    if (!apiData) return []
+    
+    // The API returns: drawresult:{tableid} plus accu, roadmap, goodroad, and allgr
+    // Standard response format: { code: "B100", msg: "...", data: { ... } }
+    let drawResults: any[] = []
+    
+    // Handle standard API response format
+    if (apiData.data) {
+      // Check for drawresult key (most likely structure)
+      if (apiData.data.drawresult && Array.isArray(apiData.data.drawresult)) {
+        drawResults = apiData.data.drawresult
+      } 
+      // Check if data itself is an array (drawresult might be the array)
+      else if (Array.isArray(apiData.data)) {
+        drawResults = apiData.data
+      }
+      // Check for nested data structure
+      else if (apiData.data.data && Array.isArray(apiData.data.data)) {
+        drawResults = apiData.data.data
+      }
+      // Try to find any array in the data object
+      else if (typeof apiData.data === 'object') {
+        const keys = Object.keys(apiData.data)
+        // Look for drawresult key first
+        const drawresultKey = keys.find(k => k.toLowerCase().includes('drawresult') || k.toLowerCase().includes('draw'))
+        if (drawresultKey && Array.isArray(apiData.data[drawresultKey])) {
+          drawResults = apiData.data[drawresultKey]
+        }
+        // Otherwise, find first array
+        else {
+          for (const key of keys) {
+            if (Array.isArray(apiData.data[key])) {
+              drawResults = apiData.data[key]
+              break
+            }
+          }
+        }
+      }
     }
-    return [...baseItems, ...additionalItems]
+    // Handle case where response might be direct array (public_history.php might return this)
+    else if (Array.isArray(apiData)) {
+      drawResults = apiData
+    }
+
+    // Convert API format to GameHistory format
+    return drawResults.map((item: any, index: number) => {
+      // Handle different possible field names for round number
+      const round = item.r_no || item.round || item.r_id || item.rno || item.round_no || (index + 1)
+      
+      // Handle different possible field names for result
+      // Backend likely uses: M=meron, W=wala, D=draw or similar codes
+      const result = item.result || item.winner || item.win || item.winner_type || item.bet_result || item.outcome || ''
+      
+      // Map result to our format
+      let mappedResult: 'meron' | 'wala' | 'draw' = 'meron'
+      if (typeof result === 'string') {
+        const resultLower = result.toLowerCase().trim()
+        // Check for meron indicators
+        if (resultLower === 'm' || resultLower === 'meron' || resultLower === '龍' || 
+            resultLower === '21001' || resultLower.includes('meron')) {
+          mappedResult = 'meron'
+        } 
+        // Check for wala indicators
+        else if (resultLower === 'w' || resultLower === 'wala' || resultLower === '虎' || 
+                 resultLower === '21002' || resultLower.includes('wala')) {
+          mappedResult = 'wala'
+        } 
+        // Check for draw indicators
+        else if (resultLower === 'd' || resultLower === 'draw' || resultLower === '和' || 
+                 resultLower === '21003' || resultLower.includes('draw')) {
+          mappedResult = 'draw'
+        }
+      } else if (typeof result === 'number') {
+        // Handle numeric codes: 21001=meron, 21002=wala, 21003=draw
+        if (result === 21001) mappedResult = 'meron'
+        else if (result === 21002) mappedResult = 'wala'
+        else if (result === 21003) mappedResult = 'draw'
+      }
+
+      return {
+        round: typeof round === 'number' ? round : parseInt(String(round)) || (index + 1),
+        result: mappedResult,
+        meronCard: item.meronCard || item.m_card || item.meron_card,
+        walaCard: item.walaCard || item.w_card || item.wala_card
+      }
+    }).filter((item: GameHistoryType) => item.round > 0) // Filter out invalid entries
   }, [])
+
+  /**
+   * Fetches history from API
+   */
+  const fetchHistory = useCallback(async () => {
+    if (!tableId) return
+    
+    // Throttle API calls - don't fetch more than once every 3 seconds
+    const now = Date.now()
+    if (now - lastFetchTimeRef.current < 3000) return
+    
+    lastFetchTimeRef.current = now
+    
+    try {
+      let historyData: any
+      
+      // Try authenticated endpoint first, fallback to public
+      if (sessionManager.getSessionId()) {
+        try {
+          historyData = await apiService.getHistory(tableId)
+        } catch (error) {
+          // If authenticated fails, try public endpoint
+          historyData = await apiService.getPublicHistory(tableId)
+        }
+      } else {
+        // No session, use public endpoint
+        historyData = await apiService.getPublicHistory(tableId)
+      }
+
+      // Handle response - public_history.php may have issues, so check for data even if code isn't B100
+      if (historyData) {
+        // For authenticated endpoint, require B100 code
+        // For public endpoint, try to parse even if code is not B100 (known issues in backend)
+        const isPublicEndpoint = !sessionManager.getSessionId() || 
+                                 (historyData.code && historyData.code !== 'B100')
+        
+        if (historyData.code === 'B100' || (isPublicEndpoint && historyData.data)) {
+          const parsedHistory = parseApiHistory(historyData)
+          if (parsedHistory.length > 0) {
+            setGameHistory(parsedHistory)
+            // Successfully parsed history
+          } else {
+            // If parsing returned empty, clear history to show only real data
+            setGameHistory([])
+            // History parsing returned empty array
+          }
+
+          // Extract accu (accumulation) data for statistics
+          // According to backend README: Returns accu, roadmap, goodroad, and allgr
+          if (historyData.data) {
+            const accu = historyData.data.accu
+            if (accu && typeof accu === 'object') {
+              // Parse accu data - format may vary, handle different structures
+              const meronWins = accu.meron || accu.M || accu.meronWins || accu.meron_count || 0
+              const walaWins = accu.wala || accu.W || accu.walaWins || accu.wala_count || 0
+              const drawWins = accu.draw || accu.D || accu.drawWins || accu.draw_count || 0
+              
+              setAccuStats({
+                meronWins: typeof meronWins === 'number' ? meronWins : parseInt(String(meronWins)) || 0,
+                walaWins: typeof walaWins === 'number' ? walaWins : parseInt(String(walaWins)) || 0,
+                drawWins: typeof drawWins === 'number' ? drawWins : parseInt(String(drawWins)) || 0
+              })
+            }
+          }
+
+          // Extract current round from API response
+          if (historyData.data) {
+            const roundData = historyData.data.r_no || historyData.data.round || historyData.data.current_round || historyData.data.r_id
+            if (roundData) {
+              const roundNum = typeof roundData === 'number' ? roundData : parseInt(String(roundData))
+              if (!isNaN(roundNum)) {
+                setApiRound(roundNum)
+              }
+            }
+          }
+        } else {
+          // If API response is not successful, clear history
+          setGameHistory([])
+          setAccuStats({ meronWins: 0, walaWins: 0, drawWins: 0 })
+          setApiRound(null)
+          // API response code not B100
+        }
+      } else {
+        setGameHistory([])
+      }
+    } catch (error) {
+      // On error, clear history to ensure only real data is shown
+      setGameHistory([])
+      // Failed to fetch history
+    }
+  }, [tableId, parseApiHistory, setGameHistory])
+
+  /**
+   * Sets up periodic history fetching
+   */
+  useEffect(() => {
+    if (!tableId) return
+    
+    // Initial fetch
+    fetchHistory()
+    
+    // Poll every 5 seconds for updates
+    const interval = setInterval(() => {
+      fetchHistory()
+    }, 5000)
+
+    return () => {
+      clearInterval(interval)
+    }
+  }, [tableId, fetchHistory])
+
 
   /**
    * Gets the history data to display
+   * Only displays real API data, no fallback to sample data
    */
   const history = useMemo(() => {
-    return gameHistory.length > 0 ? gameHistory : generateSampleHistory()
-  }, [gameHistory, generateSampleHistory])
+    return gameHistory
+  }, [gameHistory])
+
 
   /**
-   * Gets the Chinese character for a game result
-   * @param result - Game result type
-   * @returns Chinese character
-   */
-  const getResultChar = useCallback((result: string): string => {
-    switch (result) {
-      case 'meron': return '龍'
-      case 'wala': return '虎'
-      case 'draw': return '和'
-      default: return ''
-    }
-  }, [])
-
-  /**
-   * Gets the CSS color class for a game result
-   * @param result - Game result type
-   * @returns Color class name
-   */
-  const getResultColor = useCallback((result: string): string => {
-    switch (result) {
-      case 'meron': return 'red'
-      case 'wala': return 'yellow'
-      case 'draw': return 'green'
-      default: return 'empty'
-    }
-  }, [])
-
-  /**
-   * Calculates game statistics from history
+   * Gets game statistics from API accu data (real backend data)
+   * Falls back to calculating from history if accu not available
    */
   const gameStats = useMemo(() => {
+    // Use real API accu data if available
+    if (accuStats.meronWins > 0 || accuStats.walaWins > 0 || accuStats.drawWins > 0) {
+      return accuStats
+    }
+    
+    // Fallback to calculating from history (for backwards compatibility)
     const meronWins = history.filter(h => h.result === 'meron').length
     const walaWins = history.filter(h => h.result === 'wala').length
     const drawWins = history.filter(h => h.result === 'draw').length
     return { meronWins, walaWins, drawWins }
-  }, [history])
+  }, [accuStats, history])
 
   /**
-   * Gets current round number for display
+   * Gets current round number for display from API (real backend data)
+   * Falls back to currentRound or history if API round not available
    */
   const displayRound = useMemo(() => {
-    return currentRound || (history.length > 0 ? history[history.length - 1].round : 40)
-  }, [currentRound, history])
+    // Use API round if available (most accurate)
+    if (apiRound !== null) {
+      return apiRound
+    }
+    
+    // Fallback to currentRound from store
+    if (currentRound) {
+      return currentRound
+    }
+    
+    // Last resort: use latest round from history
+    if (history.length > 0) {
+      return history[history.length - 1].round
+    }
+    
+    return 40 // Default fallback
+  }, [apiRound, currentRound, history])
 
   /**
-   * Generates Big Road pattern from history
-   * This creates the roadmap display with outlined circles, solid circles, and diagonal lines
+   * Generates Bead Road pattern from history
+   * Rules:
+   * - Red ring = Meron win
+   * - Blue ring = Wala win  
+   * - Green ring = Draw
+   * - Same consecutive result = stack vertically (same column)
+   * - Different result = new column (horizontal)
+   * - When column is full (6 rows), continue in next column
    */
-  const generateRoadmap = useMemo(() => {
-    const roadmap: Array<{
-      type: 'outlined' | 'solid' | 'diagonal'
-      color: 'red' | 'yellow' | 'green'
-      row: number
-      col: number
-      hasMark?: boolean // For diagonal line marks on draws
-    }> = []
+  const generateBeadRoad = useMemo((): BeadRoadItem[] => {
+    if (history.length === 0) return []
 
-    // Big Road algorithm: columns change when result alternates
-    const columns: Array<Array<{ result: 'meron' | 'wala', isdraw: boolean }>> = []
-    let currentCol = -1
-    let lastResult: 'meron' | 'wala' | null = null
+    const beadRoad: BeadRoadItem[] = []
+    let currentCol = 0
+    let currentRow = 0
+    let lastResult: 'meron' | 'wala' | 'draw' | null = null
 
-    // Build Big Road columns
+    // Process each game result
     history.forEach((item) => {
-      if (item.result === 'draw') {
-        // Mark the last item in current column with a diagonal mark
-        if (currentCol >= 0 && columns[currentCol].length > 0) {
-          const lastItem = roadmap[roadmap.length - 1]
-          if (lastItem) {
-            lastItem.hasMark = true
-          }
+      const result = item.result
+
+      if (lastResult === null) {
+        // First result - start at column 0, row 0
+        currentCol = 0
+        currentRow = 0
+      } else if (result === lastResult) {
+        // Same result as previous - stack vertically
+        currentRow++
+        
+        // If column is full (6 rows), move to next column
+        if (currentRow >= GRID_CONFIG.ROWS) {
+          currentCol++
+          currentRow = 0
         }
-        return
+      } else {
+        // Different result - new column
+        currentCol++
+        currentRow = 0
       }
 
-      const result = item.result as 'meron' | 'wala'
-      
-      // New column if result changes or first item
-      if (lastResult === null || lastResult !== result) {
-        columns.push([{ result, isdraw: false }])
-        currentCol = columns.length - 1
-      } else {
-        // Continue in same column
-        columns[currentCol].push({ result, isdraw: false })
-      }
+      beadRoad.push({
+        result,
+        round: item.round,
+        col: currentCol,
+        row: currentRow
+      })
 
       lastResult = result
-
-      // Add outlined circle
-      roadmap.push({
-        type: 'outlined',
-        color: result === 'meron' ? 'red' : 'yellow',
-        row: columns[currentCol].length - 1,
-        col: currentCol
-      })
     })
 
-    // // Generate solid circles for Small Road (derived from Big Road)
-    // // Place them in a separate area (right side)
-    // const solidStartCol = columns.length + 2
-    // history.forEach((item, index) => {
-    //   if (item.result !== 'draw' && index > 0 && index % 3 === 0) {
-    //     const result = item.result as 'meron' | 'wala'
-    //     roadmap.push({
-    //       type: 'solid',
-    //       color: result === 'meron' ? 'red' : 'yellow',
-    //       row: Math.floor(index / 3),
-    //       col: solidStartCol + Math.floor(index / 6)
-    //     })
-    //   }
-    // })
-
-    // // Generate diagonal lines for Cockroach Road (another derived road)
-    // const diagonalStartCol = solidStartCol + Math.floor(history.length / 6) + 2
-    // history.forEach((item, index) => {
-    //   if (item.result !== 'draw' && index > 0 && index % 2 === 0) {
-    //     const result = item.result as 'meron' | 'wala'
-    //     roadmap.push({
-    //       type: 'diagonal',
-    //       color: result === 'meron' ? 'red' : 'yellow',
-    //       row: Math.floor(index / 2) + 3,
-    //       col: diagonalStartCol + Math.floor(index / 4)
-    //     })
-    //   }
-    // })
-
-    // Calculate max dimensions for grid
-    const maxRow = Math.max(
-      ...roadmap.map(item => item.row),
-      columns.reduce((max, col) => Math.max(max, col.length), 0) - 1,
-      0 // Ensure at least 0
-    )
-    const maxCol = Math.max(
-      ...roadmap.map(item => item.col), 
-      columns.length - 1,
-      0 // Ensure at least 0
-    )
-
-    return { roadmap, maxRow: Math.max(maxRow, 0), maxCol: Math.max(maxCol, 0) }
+    return beadRoad
   }, [history])
+
+  /**
+   * Calculate the maximum column for grid sizing
+   */
+  const maxColumn = useMemo(() => {
+    if (generateBeadRoad.length === 0) return GRID_CONFIG.MAX_COLS
+    return Math.max(
+      ...generateBeadRoad.map(item => item.col),
+      GRID_CONFIG.MAX_COLS - 1
+    ) + 1
+  }, [generateBeadRoad])
+
+  /**
+   * Auto-scroll to show newest results (rightmost columns)
+   */
+  useEffect(() => {
+    if (roadmapContainerRef.current && generateBeadRoad.length > 0) {
+      // Scroll to the right to show newest results
+      roadmapContainerRef.current.scrollLeft = roadmapContainerRef.current.scrollWidth
+    }
+  }, [generateBeadRoad])
+
+  /**
+   * Get CSS class for result color
+   */
+  const getBeadColor = (result: 'meron' | 'wala' | 'draw'): string => {
+    switch (result) {
+      case 'meron': return 'red'
+      case 'wala': return 'blue'
+      case 'draw': return 'green'
+      default: return ''
+    }
+  }
 
   if (variant === 'detailed') {
     return (
       <div className="game-history detailed roadmap">
-        {/* Main Roadmap Grid */}
-        <div className="roadmap-container">
+        {/* Main Bead Road Grid */}
+        <div className="roadmap-container" ref={roadmapContainerRef}>
           <div 
-            className="roadmap-grid"
+            className="bead-road-grid"
             style={{
-              gridTemplateRows: `repeat(${Math.max(5, 1)}, 24px)`,
-              gridTemplateColumns: `repeat(${Math.max(30, 1)}, 24px)`,
+              gridTemplateRows: `repeat(${GRID_CONFIG.ROWS}, 1fr)`,
+              gridTemplateColumns: `repeat(${maxColumn}, 24px)`,
             }}
           >
-            {/* Render roadmap items */}
-            {generateRoadmap.roadmap.map((item, index) => {
-              if (item.type === 'outlined') {
-                return (
-                  <div
-                    key={`outlined-${index}`}
-                    className={`roadmap-item outlined ${item.color}`}
-                    style={{
-                      gridRow: item.row + 1,
-                      gridColumn: item.col + 1
-                    }}
-                  >
-                    {item.hasMark && <div className="diagonal-mark" />}
-                  </div>
-                )
-              } else if (item.type === 'solid') {
-                return (
-                  <div
-                    key={`solid-${index}`}
-                    className={`roadmap-item solid ${item.color}`}
-                    style={{
-                      gridRow: item.row + 1,
-                      gridColumn: item.col + 1
-                    }}
-                  />
-                )
-              } else if (item.type === 'diagonal') {
-                return (
-                  <div
-                    key={`diagonal-${index}`}
-                    className={`roadmap-item diagonal ${item.color}`}
-                    style={{
-                      gridRow: item.row + 1,
-                      gridColumn: item.col + 1
-                    }}
-                  />
-                )
-              }
-              return null
-            })}
+            {/* Render bead road items */}
+            {generateBeadRoad.map((item, index) => (
+              <div
+                key={`bead-${index}`}
+                className={`bead-item ${getBeadColor(item.result)}`}
+                style={{
+                  gridRow: item.row + 1,
+                  gridColumn: item.col + 1
+                }}
+                title={`Round ${item.round}: ${item.result.toUpperCase()}`}
+              >
+                <div className="bead-ring" />
+              </div>
+            ))}
           </div>
         </div>
 
@@ -276,26 +425,26 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
           <div className="status-left">
             <span className="round-number">#{displayRound}</span>
             <div className="stat-item">
-              <span className="stat-circle red">M</span>
+              <span className="stat-dot red" />
               <span className="stat-value">{gameStats.meronWins}</span>
             </div>
             <div className="stat-item">
-              <span className="stat-circle yellow">W</span>
+              <span className="stat-dot blue" />
               <span className="stat-value">{gameStats.walaWins}</span>
             </div>
             <div className="stat-item">
-              <span className="stat-circle green">D</span>
+              <span className="stat-dot green" />
               <span className="stat-value">{gameStats.drawWins}</span>
             </div>
           </div>
           <div className="status-right">
             <button
-            onClick={toggleGameSummary}
-            className="summary-toggle-btn"
-            title="Switch to Game Summary"
-          >
-            <img src="/Button/Lobby.svg" alt="Info" className="info-icon h-[32px]" />
-          </button>
+              onClick={toggleGameSummary}
+              className="summary-toggle-btn"
+              title="Switch to Game Summary"
+            >
+              <img src="/Button/Lobby.svg" alt="Info" className="info-icon h-[32px]" />
+            </button>
           </div>
         </div>
       </div>
@@ -303,23 +452,8 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
   }
 
   /**
-   * Creates grid items for simple variant (6x12 = 72 cells)
+   * Simple variant - displays bead road in a compact grid
    */
-  const gridItems = useMemo(() => {
-    const totalCells = GRID_CONFIG.SIMPLE_ROWS * GRID_CONFIG.SIMPLE_COLS
-    return Array.from({ length: totalCells }, (_, index) => {
-      if (index < history.length) {
-        const item = history[index]
-        return {
-          result: item.result,
-          round: item.round,
-          isEmpty: false
-        }
-      }
-      return { result: '', round: 0, isEmpty: true }
-    })
-  }, [history])
-
   return (
     <div className="game-history simple">
       <div className="history-header-controls">
@@ -336,16 +470,47 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
           <span className="toggle-label">自動提交</span>
         </div>
       </div>
-      <div className="history-grid simple-grid">
-        {gridItems.map((item, index) => (
-          <div
-            key={index}
-            className={`history-item ${item.isEmpty ? 'empty' : getResultColor(item.result)}`}
-            title={item.isEmpty ? '' : `Round ${item.round}: ${item.result}`}
-          >
-            {!item.isEmpty && getResultChar(item.result)}
-          </div>
-        ))}
+      
+      {/* Bead Road Grid for Simple Variant */}
+      <div className="bead-road-simple">
+        <div 
+          className="bead-road-grid-simple"
+          style={{
+            gridTemplateRows: `repeat(${GRID_CONFIG.ROWS}, 1fr)`,
+            gridTemplateColumns: `repeat(${Math.min(maxColumn, 12)}, 1fr)`,
+          }}
+        >
+          {/* Render bead road items - show last 72 results max (6 rows x 12 cols) */}
+          {generateBeadRoad.slice(-72).map((item, index) => (
+            <div
+              key={`simple-bead-${index}`}
+              className={`bead-item-simple ${getBeadColor(item.result)}`}
+              style={{
+                gridRow: item.row + 1,
+                gridColumn: (item.col % 12) + 1
+              }}
+              title={`Round ${item.round}: ${item.result.toUpperCase()}`}
+            >
+              <div className="bead-ring-simple" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Stats Bar */}
+      <div className="simple-stats-bar">
+        <div className="stat-item">
+          <span className="stat-dot red" />
+          <span className="stat-count">{gameStats.meronWins}</span>
+        </div>
+        <div className="stat-item">
+          <span className="stat-dot green" />
+          <span className="stat-count">{gameStats.drawWins}</span>
+        </div>
+        <div className="stat-item">
+          <span className="stat-dot blue" />
+          <span className="stat-count">{gameStats.walaWins}</span>
+        </div>
       </div>
     </div>
   )

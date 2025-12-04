@@ -208,29 +208,92 @@
   }
 }
 
-/* Desktop Layout */
+/* Desktop Layout - Same order as mobile: Video -> Game History -> Betting -> Controls */
 @media (min-width: 1024px) {
+  /* Reset landscape mode behaviors for desktop - use mobile-like vertical stack */
+  .app-container {
+    height: auto;
+    min-height: 100vh;
+    max-height: none;
+  }
+  
   .video-section {
-    flex: 0 0 50vh;
-    min-height: 50vh;
-    max-height: 50vh;
+    flex: 0 0 50vh !important;
+    min-height: 50vh !important;
+    max-height: 50vh !important;
+    border-bottom: none !important;
+    padding-left: 0 !important;
+    order: 0 !important; /* Reset order - use natural document order */
   }
   
   .roadmap-section-mobile {
-    display: none; /* Hide roadmap section on desktop */
+    display: block !important; /* Show roadmap section on desktop, same as mobile */
+    flex: 0 0 280px;
+    height: 280px;
+    max-height: 202px;
+    position: static !important; /* Reset absolute positioning from landscape mode */
+    left: auto;
+    right: auto;
+    bottom: auto;
+    width: 100%;
+    z-index: auto;
+    box-shadow: none;
+    transform: none !important; /* Reset transform */
+    transition: none;
+    padding: 0;
+    order: 0 !important; /* Reset order - use natural document order */
   }
   
   .betting-section-wrapper {
-    flex: 0 0 50vh;
-    min-height: 50vh;
-    max-height: 50vh;
+    flex: 1 1 auto;
+    min-height: 326px;
+    border-top: 2px solid rgba(255, 215, 0, 0.3);
+    order: 0 !important; /* Reset order - use natural document order */
+    justify-content: flex-start; /* Reset justify-content */
+    height: auto;
+    max-height: none;
   }
   
   .betting-section-mobile {
-    display: none;
+    display: flex;
   }
   
   .betting-section-desktop {
-    display: grid;
+    display: none;
+  }
+}
+
+/* Desktop Landscape - Override landscape rules to use mobile-like layout */
+@media (min-width: 1024px) and (orientation: landscape) {
+  .app-container {
+    height: auto !important;
+    min-height: 100vh;
+    max-height: none;
+  }
+  
+  .video-section {
+    flex: 0 0 50vh !important;
+    min-height: 50vh !important;
+    max-height: 50vh !important;
+    border-bottom: none !important;
+    padding-left: 0 !important;
+    order: 0 !important;
+  }
+  
+  .roadmap-section-mobile {
+    display: block !important;
+    position: static !important;
+    transform: none !important;
+    flex: 0 0 280px !important;
+    height: 280px !important;
+    max-height: 202px !important;
+    order: 0 !important;
+  }
+  
+  .betting-section-wrapper {
+    flex: 1 1 auto !important;
+    min-height: 326px !important;
+    order: 0 !important;
+    justify-content: flex-start !important;
   }
 }

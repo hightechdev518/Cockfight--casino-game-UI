@@ -112,6 +112,138 @@
   position: relative;
 }
 
+/* ============================================
+   BEAD ROAD STYLES
+   ============================================ */
+
+.bead-road-grid {
+  display: grid;
+  gap: 2px;
+  padding: 0.5rem;
+  width: fit-content;
+  min-width: 100%;
+  height: 100%;
+  align-content: start;
+}
+
+.bead-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+}
+
+.bead-ring {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border-width: 2.5px;
+  border-style: solid;
+  background: transparent;
+  transition: transform 0.15s ease;
+}
+
+.bead-item:hover .bead-ring {
+  transform: scale(1.1);
+}
+
+/* Bead colors - Red for Meron */
+.bead-item.red .bead-ring {
+  border-color: #CC0000;
+}
+
+/* Bead colors - Blue for Wala */
+.bead-item.blue .bead-ring {
+  border-color: #0066CC;
+}
+
+/* Bead colors - Green for Draw */
+.bead-item.green .bead-ring {
+  border-color: #00AA44;
+}
+
+/* Simple variant bead road */
+.bead-road-simple {
+  flex: 1;
+  overflow: hidden;
+  padding: 0.25rem;
+}
+
+.bead-road-grid-simple {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  height: 100%;
+  align-content: start;
+}
+
+.bead-item-simple {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+}
+
+.bead-ring-simple {
+  width: 80%;
+  height: 80%;
+  border-radius: 50%;
+  border-width: 2px;
+  border-style: solid;
+  background: transparent;
+}
+
+/* Simple variant bead colors */
+.bead-item-simple.red .bead-ring-simple {
+  border-color: #CC0000;
+}
+
+.bead-item-simple.blue .bead-ring-simple {
+  border-color: #0066CC;
+}
+
+.bead-item-simple.green .bead-ring-simple {
+  border-color: #00AA44;
+}
+
+/* Stats bar for simple variant */
+.simple-stats-bar {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+}
+
+.stat-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid;
+}
+
+.stat-dot.red {
+  border-color: #CC0000;
+}
+
+.stat-dot.blue {
+  border-color: #0066CC;
+}
+
+.stat-dot.green {
+  border-color: #00AA44;
+}
+
+.stat-count {
+  font-size: 0.85rem;
+  font-weight: bold;
+  color: #333;
+  margin-left: 0.25rem;
+}
+
 /* Scrollbar styles for roadmap container */
 .roadmap-container::-webkit-scrollbar {
   width: 8px;
@@ -264,6 +396,27 @@
 
 .stat-circle.green {
   background: #00cc66;
+}
+
+/* Status bar stat dots (outlined rings matching bead road) */
+.roadmap-status-bar .stat-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2.5px solid;
+  background: transparent;
+}
+
+.roadmap-status-bar .stat-dot.red {
+  border-color: #CC0000;
+}
+
+.roadmap-status-bar .stat-dot.blue {
+  border-color: #0066CC;
+}
+
+.roadmap-status-bar .stat-dot.green {
+  border-color: #00AA44;
 }
 
 .stat-value {

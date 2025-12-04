@@ -21,6 +21,7 @@ export interface GameState {
   isLive: boolean
   gameId: string
   tableId: string
+  roundId?: string // Round ID for betting API
   bets: Bet[]
   selectedChip: number
   totalBet: number
@@ -31,6 +32,7 @@ export interface GameState {
   currentRound?: number
   countdown?: number
   showGameSummary: boolean
+  bettingError?: string | null // Store betting errors
 }
 
 interface GameStore extends GameState {
@@ -44,10 +46,14 @@ interface GameStore extends GameState {
   toggleAutoSubmit: () => void
   doubleBets: () => void
   addGameHistory: (history: GameHistory) => void
+  setGameHistory: (history: GameHistory[]) => void
   setConnectionStatus: (status: GameState['connectionStatus']) => void
   setAccountBalance: (balance: number) => void
   toggleGameSummary: () => void
   setGameSummary: (show: boolean) => void
+  setRoundId: (roundId: string) => void
+  setBettingError: (error: string | null) => void
+  switchTable: (tableId: string) => void
 }
 
 const initialState: GameState = {
@@ -63,7 +69,8 @@ const initialState: GameState = {
   connectionStatus: 'disconnected',
   currentRound: 40,
   countdown: 20,
-  showGameSummary: false
+  showGameSummary: false,
+  bettingError: null
 }
 
 export const useGameStore = create<GameStore>((set) => ({
@@ -99,12 +106,32 @@ export const useGameStore = create<GameStore>((set) => ({
   addGameHistory: (history) => set((state) => ({
     gameHistory: [...state.gameHistory, history]
   })),
-  
+
+  setGameHistory: (history) => set({ gameHistory: history }),
+
   setConnectionStatus: (status) => set({ connectionStatus: status }),
   
   setAccountBalance: (balance) => set({ accountBalance: balance }),
 
   toggleGameSummary: () => set((state) => ({ showGameSummary: !state.showGameSummary })),
 
-  setGameSummary: (show) => set({ showGameSummary: show })
+  setGameSummary: (show) => set({ showGameSummary: show }),
+
+  setRoundId: (roundId) => set({ roundId }),
+
+  setBettingError: (error) => set({ bettingError: error }),
+
+  switchTable: (tableId: string) => {
+    set((state) => {
+      // Clear game history when switching tables
+      return {
+        ...state,
+        tableId: tableId,
+        gameHistory: [],
+        currentRound: undefined,
+        roundId: undefined,
+        countdown: undefined,
+      }
+    })
+  }
 }))

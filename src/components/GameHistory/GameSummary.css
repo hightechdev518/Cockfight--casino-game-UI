@@ -97,6 +97,17 @@
   border-color: rgba(209, 154, 102, 0.5);
   background: linear-gradient(135deg, #323246 0%, #252535 100%);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  transform: translateY(-2px);
+}
+
+.game-card.active-table {
+  border-color: rgba(255, 215, 0, 0.6);
+  background: linear-gradient(135deg, #3a3a4e 0%, #2d2d3d 100%);
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.3);
+}
+
+.game-card.active-table::before {
+  background: linear-gradient(90deg, transparent, rgba(255, 215, 0, 0.6), transparent);
 }
 
 .game-card-header {

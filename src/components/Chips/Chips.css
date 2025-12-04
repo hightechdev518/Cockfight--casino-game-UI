@@ -196,3 +196,114 @@
 }
 
 }
+
+/* Desktop PC Mode - Horizontal chips layout */
+@media (min-width: 1024px) {
+  .chips-container.chips-desktop-horizontal {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.3rem !important;
+    width: auto !important;
+    flex-shrink: 0 !important;
+  }
+
+  .chips-grid-desktop {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.3rem !important;
+    position: static !important;
+    bottom: auto !important;
+    left: auto !important;
+    width: auto !important;
+    height: auto !important;
+    flex-wrap: nowrap !important;
+  }
+
+  .chips-container.chips-desktop-horizontal .chip {
+    width: 56px !important;
+    height: 56px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .chips-container.chips-desktop-horizontal .chip-image {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+  }
+
+  /* Increase gap between chips for better spacing with larger chips */
+  .chips-container.chips-desktop-horizontal {
+    gap: 0.5rem !important;
+  }
+
+  .chips-grid-desktop {
+    gap: 0.5rem !important;
+  }
+
+  /* Pop-up animation for selected chip in desktop mode */
+  .chips-container.chips-desktop-horizontal .chip.selected {
+    animation: chipPopUp 0.4s ease-out;
+    transform: scale(1.15);
+    z-index: 10;
+    position: relative;
+  }
+
+  .chips-container.chips-desktop-horizontal .chip.selected::before {
+    content: '';
+    position: absolute;
+    top: -4px;
+    left: -4px;
+    right: -4px;
+    bottom: -4px;
+    border-radius: 50%;
+    border: 3px solid #ffd700;
+    box-shadow: 
+      0 0 10px rgba(255, 215, 0, 0.6),
+      0 0 20px rgba(255, 215, 0, 0.4),
+      0 0 30px rgba(255, 215, 0, 0.2);
+    animation: chipGlow 1.5s ease-in-out infinite;
+  }
+
+  @keyframes chipPopUp {
+    0% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.25);
+    }
+    100% {
+      transform: scale(1.15);
+    }
+  }
+
+  @keyframes chipGlow {
+    0%, 100% {
+      opacity: 1;
+      box-shadow: 
+        0 0 10px rgba(255, 215, 0, 0.6),
+        0 0 20px rgba(255, 215, 0, 0.4),
+        0 0 30px rgba(255, 215, 0, 0.2);
+    }
+    50% {
+      opacity: 0.8;
+      box-shadow: 
+        0 0 15px rgba(255, 215, 0, 0.8),
+        0 0 25px rgba(255, 215, 0, 0.6),
+        0 0 35px rgba(255, 215, 0, 0.4);
+    }
+  }
+
+  /* Hover effect for non-selected chips */
+  .chips-container.chips-desktop-horizontal .chip:not(.selected):hover {
+    transform: translateY(-4px) scale(1.1);
+    transition: transform 0.2s ease;
+  }
+
+  /* Ensure smooth transition when selection changes */
+  .chips-container.chips-desktop-horizontal .chip {
+    transition: transform 0.3s ease, scale 0.3s ease;
+  }
+}

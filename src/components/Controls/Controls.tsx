@@ -17,6 +17,8 @@ interface ControlsProps {
   chipSlot?: React.ReactNode
   /** Total pending bets amount (for enable/disable state) */
   pendingBetAmount?: number
+  /** Whether bets are currently being submitted */
+  isSubmitting?: boolean
 }
 
 /**
@@ -25,12 +27,12 @@ interface ControlsProps {
  * @param props - Component props
  * @returns JSX element
  */
-const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onUndo, chipSlot, pendingBetAmount = 0 }) => {
+const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onUndo, chipSlot, pendingBetAmount = 0, isSubmitting = false }) => {
   /**
-   * Handles refresh button click
+   * Handles refresh button click - reloads the page
    */
   const handleRefresh = useCallback(() => {
-    // Refresh logic will be implemented when backend is available
+    window.location.reload()
   }, [])
 
   /**
@@ -53,7 +55,7 @@ const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onUnd
   /**
    * Checks if confirm button should be disabled
    */
-  const isConfirmDisabled = pendingBetAmount === 0
+  const isConfirmDisabled = pendingBetAmount === 0 || isSubmitting
 
   /**
    * Current timestamp formatted
@@ -89,16 +91,23 @@ const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onUnd
       {/* Middle buttons */}
       <div className="controls-center-group">
         <button 
-          className="control-btn-circle confirm" 
+          className={`control-btn-circle confirm ${pendingBetAmount > 0 && !isSubmitting ? 'has-pending-bet' : ''}`}
           onClick={onConfirm} 
           disabled={isConfirmDisabled}
           aria-label="Confirm bets"
           aria-disabled={isConfirmDisabled}
           type="button"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <path d="M20 6L9 17l-5-5"/>
-          </svg>
+          {isSubmitting ? (
+            <svg className="animate-spin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <circle cx="12" cy="12" r="10" strokeOpacity="0.25"/>
+              <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round"/>
+            </svg>
+          ) : (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M20 6L9 17l-5-5"/>
+            </svg>
+          )}
         </button>
         {/* Chip slot - inserted between confirm and clear */}
         {chipSlot}

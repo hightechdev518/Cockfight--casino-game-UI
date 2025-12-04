@@ -1,5 +1,6 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useEffect, useRef } from 'react'
 import { useGameStore } from '../../store/gameStore'
+import { apiService } from '../../services/apiService'
 import './AccountInfo.css'
 
 /**
@@ -8,7 +9,8 @@ import './AccountInfo.css'
  * @returns JSX element
  */
 const AccountInfo: React.FC = () => {
-  const { accountBalance, gameId } = useGameStore()
+  const { accountBalance, gameId, setAccountBalance } = useGameStore()
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   /**
    * Formats currency value with proper locale formatting
@@ -28,8 +30,47 @@ const AccountInfo: React.FC = () => {
   const formattedBalance = useMemo(() => formatCurrency(accountBalance), [accountBalance, formatCurrency])
 
   /**
+   * Fetches balance from API
+   */
+  const fetchBalance = useCallback(async () => {
+    try {
+      const balance = await apiService.getBalance()
+      setAccountBalance(balance)
+    } catch (error) {
+      // Silently fail - balance polling shouldn't disrupt the UI
+      // Session might not be initialized yet
+      if (import.meta.env.DEV) {
+        console.debug('Balance fetch failed (expected if not logged in):', error)
+      }
+    }
+  }, [setAccountBalance])
+
+  /**
+   * Sets up balance polling
+   */
+  useEffect(() => {
+    // Poll balance every 5 seconds
+    pollingIntervalRef.current = setInterval(() => {
+      fetchBalance()
+    }, 5000)
+
+    // Initial fetch
+    fetchBalance()
+
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+        pollingIntervalRef.current = null
+      }
+    }
+  }, [fetchBalance])
+
+  /**
    * Handles refresh button click
    */
+  const handleRefresh = useCallback(() => {
+    fetchBalance()
+  }, [fetchBalance])
 
   return (
     <div className="account-info">

@@ -84,6 +84,11 @@
   color: #fff;
 }
 
+.control-btn-circle.confirm {
+  position: relative;
+  overflow: visible;
+}
+
 .control-btn-circle.confirm:hover,
 .control-btn-circle.clear:hover,
 .control-btn-circle.double:hover {
@@ -93,6 +98,74 @@
 .control-btn-circle:disabled {
   opacity: 1;
   cursor: not-allowed;
+}
+
+/* Casino-style pulsing glow animation for confirm button when bet is pending */
+.control-btn-circle.confirm.has-pending-bet {
+  animation: casinoPulse 1.2s ease-in-out infinite;
+  background: linear-gradient(135deg, #00aa44 0%, #00cc55 50%, #00aa44 100%) !important;
+  border: 2px solid #00ff66 !important;
+  box-shadow: 
+    0 0 10px rgba(0, 255, 102, 0.5),
+    0 0 20px rgba(0, 255, 102, 0.3),
+    0 0 30px rgba(0, 255, 102, 0.2),
+    inset 0 0 10px rgba(255, 255, 255, 0.1);
+}
+
+.control-btn-circle.confirm.has-pending-bet::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  right: -4px;
+  bottom: -4px;
+  border-radius: 50%;
+  background: transparent;
+  border: 2px solid rgba(0, 255, 102, 0.6);
+  animation: casinoRipple 1.2s ease-out infinite;
+}
+
+.control-btn-circle.confirm.has-pending-bet::after {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  right: -8px;
+  bottom: -8px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid rgba(0, 255, 102, 0.3);
+  animation: casinoRipple 1.2s ease-out infinite 0.3s;
+}
+
+@keyframes casinoPulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 
+      0 0 10px rgba(0, 255, 102, 0.5),
+      0 0 20px rgba(0, 255, 102, 0.3),
+      0 0 30px rgba(0, 255, 102, 0.2),
+      inset 0 0 10px rgba(255, 255, 255, 0.1);
+  }
+  50% {
+    transform: scale(1.15);
+    box-shadow: 
+      0 0 20px rgba(0, 255, 102, 0.8),
+      0 0 40px rgba(0, 255, 102, 0.5),
+      0 0 60px rgba(0, 255, 102, 0.3),
+      inset 0 0 15px rgba(255, 255, 255, 0.2);
+  }
+}
+
+@keyframes casinoRipple {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
 }
 
 /* Mobile Responsive Styles */
@@ -151,5 +224,42 @@
   .controls-center-group,
   .controls-right-group {
     gap: 1rem;
+  }
+}
+
+/* Desktop PC Mode - Keep controls horizontal (like mobile) */
+@media (min-width: 1024px) {
+  .controls-inline {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    flex: 1 !important;
+  }
+
+  .controls-left-group,
+  .controls-center-group,
+  .controls-right-group {
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    width: auto !important;
+  }
+
+  .controls-center-group {
+    padding-left: 0 !important;
+  }
+
+  .controls-right-group {
+    padding-left: 0 !important;
+    gap: 1rem !important;
+  }
+
+  .control-btn-circle {
+    width: 48px !important;
+    height: 48px !important;
   }
 }
