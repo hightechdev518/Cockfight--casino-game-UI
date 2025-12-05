@@ -65,13 +65,6 @@ const AccountInfo: React.FC = () => {
     }
   }, [fetchBalance])
 
-  /**
-   * Handles refresh button click
-   */
-  const handleRefresh = useCallback(() => {
-    fetchBalance()
-  }, [fetchBalance])
-
   return (
     <div className="account-info">
       <div className="account-balance-section">

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
 import 'react-circular-progressbar/dist/styles.css'
-import { useGameStore, useGameStore as getGameStore } from '../../store/gameStore'
-import { API_BASE_URL, apiService, sessionManager } from '../../services/apiService'
+import { useGameStore } from '../../store/gameStore'
+import { apiService, sessionManager } from '../../services/apiService'
 import flvjs from 'flv.js'
 import './LiveVideo.css'
 
@@ -316,9 +316,6 @@ const COUNTDOWN_CONFIG = {
   STROKE_WIDTH: 8,
 } as const
 
-const trimTrailingSlash = (value: string): string => value.replace(/\/+$/, '')
-const LOBBY_INFO_ENDPOINT = `${trimTrailingSlash(API_BASE_URL)}/lobbyinfo.php`
-
 /**
  * LiveVideo component displays a live video feed with overlay controls and countdown timer
  * 
@@ -338,7 +335,7 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
   const [liveVideoUrl, setLiveVideoUrl] = useState<string>('')
   const [streamType, setStreamType] = useState<StreamType>('unknown')
   const [iframeUrl, setIframeUrl] = useState<string>('')
-  const { countdown, totalBet, tableId: storeTableId, roundId, currentRound, gameHistory, roundStatus } = useGameStore()
+  const { countdown, totalBet, tableId: storeTableId, gameHistory, roundStatus } = useGameStore()
   // Use tableId from store, but log if it seems wrong
   const tableId = storeTableId
   const lastFetchTimeRef = useRef(0)
@@ -761,9 +758,9 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
   }, [propVideoUrl, liveVideoUrl])
 
   /**
-   * Handles video error events
+   * Handles video error events (native Event for addEventListener)
    */
-  const handleVideoError = useCallback((event?: Event) => {
+  const handleVideoErrorNative = useCallback(() => {
     const video = videoRef.current
     if (video && import.meta.env.DEV) {
       console.error('📺 Video error:', {
@@ -784,6 +781,13 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
       }, 3000)
     }
   }, [fetchVideoUrl])
+
+  /**
+   * Handles video error events (React SyntheticEvent for onError prop)
+   */
+  const handleVideoError = useCallback((_event: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+    handleVideoErrorNative()
+  }, [handleVideoErrorNative])
 
   /**
    * Handles video load success
@@ -1074,18 +1078,18 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
     const video = videoRef.current
     if (!video) return
 
-    video.addEventListener('error', handleVideoError)
+    video.addEventListener('error', handleVideoErrorNative)
     video.addEventListener('loadeddata', handleVideoLoaded)
     video.addEventListener('play', handleVideoPlay)
     video.addEventListener('pause', handleVideoPause)
 
     return () => {
-      video.removeEventListener('error', handleVideoError)
+      video.removeEventListener('error', handleVideoErrorNative)
       video.removeEventListener('loadeddata', handleVideoLoaded)
       video.removeEventListener('play', handleVideoPlay)
       video.removeEventListener('pause', handleVideoPause)
     }
-  }, [handleVideoError, handleVideoLoaded, handleVideoPlay, handleVideoPause])
+  }, [handleVideoErrorNative, handleVideoLoaded, handleVideoPlay, handleVideoPause])
 
   /**
    * Toggles video play/pause state

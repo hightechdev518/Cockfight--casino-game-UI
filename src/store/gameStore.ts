@@ -15,6 +15,7 @@ export interface GameHistory {
   result: 'meron' | 'wala' | 'draw'
   meronCard?: { suit: 'red' | 'black', value: number }
   walaCard?: { suit: 'red' | 'black', value: number }
+  timestamp?: number
 }
 
 export interface GameState {

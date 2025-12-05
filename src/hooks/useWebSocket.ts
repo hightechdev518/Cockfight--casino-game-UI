@@ -8,14 +8,6 @@ const WS_URLS = [
   'wss://wss.ho8.net:2096/',
 ]
 
-// Get WebSocket URL from env or use production default
-const getWsUrl = (): string => {
-  if (import.meta.env.VITE_WS_URL) {
-    return import.meta.env.VITE_WS_URL
-  }
-  return WS_URLS[0]
-}
-
 export const useWebSocket = () => {
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)

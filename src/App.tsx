@@ -242,7 +242,7 @@ function App() {
                       // Odds API might return r_id in the response
                       const oddsData = oddsResponse.data
                       if (Array.isArray(oddsData) && oddsData.length > 0) {
-                        const firstOdd = oddsData[0]
+                        const firstOdd = oddsData[0] as any
                         if (firstOdd.r_id) {
                           initializeGame({ roundId: firstOdd.r_id.toString() })
                           if (import.meta.env.DEV) {
@@ -458,7 +458,7 @@ function App() {
                   if (oddsResponse && oddsResponse.code === 'B100' && oddsResponse.data) {
                     const oddsData = oddsResponse.data
                     if (Array.isArray(oddsData) && oddsData.length > 0) {
-                      const firstOdd = oddsData[0]
+                      const firstOdd = oddsData[0] as any
                       if (firstOdd.r_id) {
                         updateData.roundId = firstOdd.r_id.toString()
                         if (import.meta.env.DEV) {
@@ -510,7 +510,7 @@ function App() {
                   if (oddsResponse && oddsResponse.code === 'B100' && oddsResponse.data) {
                     const oddsData = oddsResponse.data
                     if (Array.isArray(oddsData) && oddsData.length > 0) {
-                      const firstOdd = oddsData[0]
+                      const firstOdd = oddsData[0] as any
                       if (firstOdd.r_id) {
                         updateData.roundId = firstOdd.r_id.toString()
                         if (import.meta.env.DEV) {

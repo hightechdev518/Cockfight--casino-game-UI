@@ -60,7 +60,7 @@ export interface LoginResponse extends ApiResponse {
 
 // Player info response
 // Original site structure: balance, username, currency, betlimit, gid, gidlist are at root level, not in data
-export interface PlayerInfoResponse extends ApiResponse {
+export interface PlayerInfoResponse extends Omit<ApiResponse, 'balance'> {
   username?: string
   balance?: string | number // Can be string "507523.2000" or number
   currency?: string
