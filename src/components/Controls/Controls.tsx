@@ -19,6 +19,8 @@ interface ControlsProps {
   pendingBetAmount?: number
   /** Whether bets are currently being submitted */
   isSubmitting?: boolean
+  /** Round status: 1 = betting open, 2 = fighting/betting closed, 4 = settled */
+  roundStatus?: number
 }
 
 /**
@@ -27,7 +29,7 @@ interface ControlsProps {
  * @param props - Component props
  * @returns JSX element
  */
-const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onUndo, chipSlot, pendingBetAmount = 0, isSubmitting = false }) => {
+const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onUndo, chipSlot, pendingBetAmount = 0, isSubmitting = false, roundStatus }) => {
   /**
    * Handles refresh button click - reloads the page
    */
@@ -53,9 +55,39 @@ const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onUnd
 
 
   /**
-   * Checks if confirm button should be disabled
+   * Check if betting is currently allowed
+   * Betting is allowed only when roundStatus === 1 (betting period)
+   * When roundStatus === 2 (fighting), betting is disabled
+   * If roundStatus is undefined, allow betting (server will validate)
    */
-  const isConfirmDisabled = pendingBetAmount === 0 || isSubmitting
+  const isBettingAllowed = roundStatus === undefined || roundStatus === 1
+
+  /**
+   * Checks if confirm button should be disabled
+   * Disabled when: no pending bets, submitting, or fighting (roundStatus === 2)
+   */
+  const isConfirmDisabled = pendingBetAmount === 0 || isSubmitting || !isBettingAllowed
+
+  /**
+   * Checks if clear button should be disabled
+   * Disabled when: no pending bets, submitting, or fighting (roundStatus === 2)
+   * Clear can only cancel bets during betting period (roundStatus === 1)
+   */
+  const isClearDisabled = pendingBetAmount === 0 || isSubmitting || !isBettingAllowed
+
+  /**
+   * Checks if undo button should be disabled
+   * Disabled when: no pending bets, submitting, or fighting (roundStatus === 2)
+   * Undo can only work during betting period (roundStatus === 1)
+   */
+  const isUndoDisabled = pendingBetAmount === 0 || isSubmitting || !isBettingAllowed
+
+  /**
+   * Checks if double button should be disabled
+   * Disabled when: no pending bets, submitting, or fighting (roundStatus === 2)
+   * Double can only work during betting period (roundStatus === 1)
+   */
+  const isDoubleDisabled = pendingBetAmount === 0 || isSubmitting || !isBettingAllowed
 
   /**
    * Current timestamp formatted
@@ -66,9 +98,11 @@ const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onUnd
       {/* Left side buttons */}
       <div className="controls-left-group">
         <button 
-          className="control-btn-circle undo" 
+          className={`control-btn-circle undo ${isUndoDisabled ? 'disabled' : ''}`}
           onClick={handleUndo}
+          disabled={isUndoDisabled}
           aria-label="Undo last bet"
+          aria-disabled={isUndoDisabled}
           type="button"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -112,9 +146,11 @@ const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onUnd
         {/* Chip slot - inserted between confirm and clear */}
         {chipSlot}
         <button 
-          className="control-btn-circle clear" 
+          className={`control-btn-circle clear ${isClearDisabled ? 'disabled' : ''}`}
           onClick={onClear}
+          disabled={isClearDisabled}
           aria-label="Clear all bets"
+          aria-disabled={isClearDisabled}
           type="button"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -123,9 +159,11 @@ const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onUnd
           </svg>
         </button>
         <button 
-          className="control-btn-circle double" 
+          className={`control-btn-circle double ${isDoubleDisabled ? 'disabled' : ''}`}
           onClick={onDouble}
+          disabled={isDoubleDisabled}
           aria-label="Double all bets"
+          aria-disabled={isDoubleDisabled}
           type="button"
         >
           <span className="double-text">X2</span>
@@ -135,7 +173,7 @@ const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onUnd
       {/* Right side - Timestamp and Menu */}
       <div className="controls-right-group">
         <button 
-          className="control-btn-circle menu"
+          className="control-btn-circle menu menu-pc-hide"
           onClick={handleLobby}
           aria-label="Menu"
           type="button"

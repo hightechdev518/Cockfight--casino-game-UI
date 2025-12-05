@@ -59,11 +59,22 @@ export interface LoginResponse extends ApiResponse {
 }
 
 // Player info response
+// Original site structure: balance, username, currency, betlimit, gid, gidlist are at root level, not in data
 export interface PlayerInfoResponse extends ApiResponse {
+  username?: string
+  balance?: string | number // Can be string "507523.2000" or number
+  currency?: string
+  betlimit?: {
+    min?: string
+    max?: string
+  }
+  gid?: Record<string, string>
+  gidlist?: Record<string, string>
+  // Also support data structure for backward compatibility
   data?: {
-    username: string
-    balance: number
-    currency: string
+    username?: string
+    balance?: number
+    currency?: string
     min?: number
     max?: number
     gid?: string[]
@@ -90,10 +101,37 @@ export interface BetRequest {
   anyodds?: 'Y' | 'N' // Y to accept server odds automatically
 }
 
-// Betting response
+// Betting response (wager_rid.php format)
 export interface BetResponse extends ApiResponse {
   balance?: number
   cuid?: string
+  unsettle?: Array<{
+    w_no: string
+    w_t_id: string
+    w_r_id: string | number
+    w_type: string
+    w_bet: string | number
+    w_validbet: string | number | null
+    w_win: string | number | null
+    w_status: number
+    w_betdate: string
+    w_settledate: string | null
+    w_updatedate: string | null
+    w_info: string // JSON string
+    w_bettype: string | number
+    w_betzone: string
+    w_bet_odds: string
+    w_currency: string
+    w_real: boolean
+    w_bl_group: string
+    w_exrate: string
+    [key: string]: any
+  }>
+  settle?: Array<{
+    w_no: string
+    [key: string]: any
+  }>
+  // Legacy support
   allbets?: Array<{
     w_no: string
     w_bet: number
@@ -143,6 +181,7 @@ export const ERROR_CODES: Record<string, string> = {
   B204: 'Account disabled',
   B210: 'Site/game maintenance or suspended',
   B211: 'Game/table not open',
+  B212: 'Round/session not open for betting',
   B215: 'Missing bet-limit profile',
   B216: 'Amount outside bet-limit range',
   B217: 'Round-level bet limit exceeded',
@@ -276,7 +315,13 @@ export const apiService = {
     formData.append('sess_id', sessId)
     formData.append('uniqueid', generateUniqueId())
 
-    const response = await formClient.post<PlayerInfoResponse>('/playerinfo.php', formData.toString())
+    // Add headers to match original site's request format
+    const response = await formClient.post<PlayerInfoResponse>('/playerinfo.php', formData.toString(), {
+      headers: {
+        'Origin': 'https://game.ho8.net',
+        'Referer': 'https://game.ho8.net/',
+      },
+    })
     return response.data
   },
 
@@ -340,7 +385,14 @@ export const apiService = {
     if (request.cuid) formData.append('cuid', request.cuid)
     if (request.anyodds) formData.append('anyodds', request.anyodds)
 
-    const response = await formClient.post<BetResponse>('/bet_cflive.php', formData.toString())
+    // Use wager_rid.php endpoint (same as original site)
+    // Add headers to match original site's request format
+    const response = await formClient.post<BetResponse>('/wager_rid.php', formData.toString(), {
+      headers: {
+        'Origin': 'https://game.ho8.net',
+        'Referer': 'https://game.ho8.net/',
+      },
+    })
     
     if (response.data.code !== 'B100') {
       const errorMsg = ERROR_CODES[response.data.code] || response.data.msg || 'Betting failed'

@@ -31,6 +31,7 @@ export interface GameState {
   connectionStatus: 'connected' | 'disconnected' | 'connecting'
   currentRound?: number
   countdown?: number
+  roundStatus?: number // Round status: 1 = betting open, 2 = betting closed/fighting, 4 = settled
   showGameSummary: boolean
   bettingError?: string | null // Store betting errors
 }
@@ -59,7 +60,7 @@ interface GameStore extends GameState {
 const initialState: GameState = {
   isLive: true,
   gameId: 'CBXE08251119097',
-  tableId: 'E08',
+  tableId: 'CF01', // Default to CF01 (will be overridden by URL parameter)
   bets: [],
   selectedChip: 20,
   totalBet: 0,
@@ -68,7 +69,7 @@ const initialState: GameState = {
   gameHistory: [],
   connectionStatus: 'disconnected',
   currentRound: 40,
-  countdown: 20,
+  countdown: undefined, // Timer only shows after game result
   showGameSummary: false,
   bettingError: null
 }

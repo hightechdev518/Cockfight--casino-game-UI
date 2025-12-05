@@ -67,11 +67,42 @@ const GameSummary: React.FC<GameSummaryProps> = ({ onClose }) => {
     }
 
     // Convert API format to TableInfo format
+    // Map table numbers to table IDs: Table 1 → CF01, Table 2 → CF02, etc.
+    const tableIdMap: Record<number, string> = {
+      1: 'CF01',
+      2: 'CF02',
+      3: 'CF03',
+      4: 'CF04',
+      5: 'CF05',
+      6: 'CF06'
+    }
+    
     tablesData.forEach((table: any, index: number) => {
-      const tableId = table.tableId || table.t_id || table.table_id || table.id || `table-${index + 1}`
-      const tableName = table.name || table.table_name || `Table ${index + 1}`
-      const round = table.r_no || table.round || table.r_id || table.round_no || 0
-      const roundId = table.r_id || table.round_id || table.roundId
+      // Get table number from API (tableid like "CF01" or index)
+      const apiTableId = table.tableid || table.tableId || table.t_id || table.table_id || table.id
+      
+      // Determine table number (1-6)
+      let tableNumber = index + 1
+      
+      // Try to extract table number from tableId (e.g., "CF01" → 1)
+      if (apiTableId) {
+        const match = apiTableId.match(/CF0?(\d+)/i) || apiTableId.match(/(\d+)/)
+        if (match) {
+          const num = parseInt(match[1], 10)
+          if (num >= 1 && num <= 6) {
+            tableNumber = num
+          }
+        }
+      }
+      
+      // Map to correct table ID (CF01, CF02, etc.)
+      const mappedTableId = tableIdMap[tableNumber] || `CF0${tableNumber}`
+      
+      // Display name as "Table 1", "Table 2", etc.
+      const tableName = `Table ${tableNumber}`
+      
+      const round = table.r_no || table.round || table.r_id || table.round_no || table.r_info?.cf_roundno || 0
+      const roundId = table.r_id || table.round_id || table.roundId || table.trid
       
       // Determine status based on API data
       let status = 'Betting'
@@ -79,6 +110,12 @@ const GameSummary: React.FC<GameSummaryProps> = ({ onClose }) => {
         status = table.status
       } else if (table.round_status) {
         status = table.round_status
+      } else if (table.roundstatus === 1) {
+        status = 'Betting'
+      } else if (table.roundstatus === 2) {
+        status = 'Fighting'
+      } else if (table.roundstatus === 4) {
+        status = 'Settled'
       } else if (table.state) {
         status = table.state
       } else if (table.countdown !== undefined && table.countdown > 0) {
@@ -91,14 +128,21 @@ const GameSummary: React.FC<GameSummaryProps> = ({ onClose }) => {
       const openCount = table.open_count || table.player_count || table.online_count || table.count || 0
 
       tablesList.push({
-        id: tableId,
+        id: mappedTableId,
         name: tableName,
         round: typeof round === 'number' ? round : parseInt(String(round)) || 0,
         status: status,
         openCount: typeof openCount === 'number' ? openCount : parseInt(String(openCount)) || 0,
-        tableId: tableId,
+        tableId: mappedTableId, // Use mapped table ID (CF01, CF02, etc.)
         roundId: roundId
       })
+    })
+
+    // Sort by table number to ensure correct order (Table 1, 2, 3, 4, 5, 6)
+    tablesList.sort((a, b) => {
+      const aNum = parseInt(a.tableId?.replace('CF0', '') || '0', 10)
+      const bNum = parseInt(b.tableId?.replace('CF0', '') || '0', 10)
+      return aNum - bNum
     })
 
     return tablesList.slice(0, 6) // Limit to 6 tables
@@ -185,15 +229,23 @@ const GameSummary: React.FC<GameSummaryProps> = ({ onClose }) => {
 
   /**
    * Handles table selection/switching
+   * Maps Table 1 → CF01, Table 2 → CF02, etc.
    */
   const handleTableClick = useCallback((selectedTable: TableInfo) => {
     if (!selectedTable.tableId) return
     
+    // Ensure we're using the correct table ID (CF01, CF02, etc.)
+    const targetTableId = selectedTable.tableId
+    
+    if (import.meta.env.DEV) {
+      console.log('🔄 Switching to table:', selectedTable.name, '→', targetTableId)
+    }
+    
     // Switch table in store
-    switchTable(selectedTable.tableId)
+    switchTable(targetTableId)
     
     // Update URL parameter
-    setUrlParam('tableid', selectedTable.tableId)
+    setUrlParam('tableid', targetTableId)
     
     // Close game summary view
     setGameSummary(false)

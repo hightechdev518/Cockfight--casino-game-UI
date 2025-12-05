@@ -181,8 +181,9 @@
 }
 
 .close-button:hover {
-  background: rgba(80, 80, 80, 0.95);
-  transform: scale(1.05);
+  background: rgba(100, 100, 100, 1);
+  transform: scale(1.1);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.3);
 }
 
 .close-button:active {
@@ -253,8 +254,9 @@
 }
 
 .control-icon:hover {
-  background: rgba(80, 80, 80, 0.95);
-  transform: scale(1.05);
+  background: rgba(100, 100, 100, 1);
+  transform: scale(1.1);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.3);
 }
 
 .control-icon:active {
@@ -300,6 +302,7 @@
 .countdown-badge.green .CircularProgressbar-text {
   fill: #00ff88;
   font-weight: 900;
+  font-size: 2.5rem !important;
   dominant-baseline: middle;
   text-anchor: middle;
 }
@@ -312,6 +315,7 @@
 .countdown-badge.yellow .CircularProgressbar-text {
   fill: #ffff00;
   font-weight: 900;
+  font-size: 2.5rem !important;
   dominant-baseline: middle;
   text-anchor: middle;
 }
@@ -324,6 +328,7 @@
 .countdown-badge.red .CircularProgressbar-text {
   fill: #ff0000;
   font-weight: 900;
+  font-size: 2.5rem !important;
   dominant-baseline: middle;
   text-anchor: middle;
 }
@@ -372,9 +377,10 @@
 }
 
 .play-button:hover {
-  background: rgba(0, 0, 0, 0.9);
+  background: rgba(0, 0, 0, 0.95);
   border-color: #ffd700;
-  transform: translate(-50%, -50%) scale(1.1);
+  transform: translate(-50%, -50%) scale(1.15);
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
 }
 
 .play-button:active {

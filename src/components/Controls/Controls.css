@@ -96,8 +96,22 @@
 }
 
 .control-btn-circle:disabled {
-  opacity: 1;
+  opacity: 0.5;
   cursor: not-allowed;
+  pointer-events: none;
+}
+
+.control-btn-circle.clear.disabled,
+.control-btn-circle.clear:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+  background: rgba(53, 50, 50, 0.5) !important;
+}
+
+.control-btn-circle.clear.disabled:hover,
+.control-btn-circle.clear:disabled:hover {
+  background: rgba(53, 50, 50, 0.5) !important;
 }
 
 /* Casino-style pulsing glow animation for confirm button when bet is pending */
@@ -233,33 +247,48 @@
     flex-direction: row !important;
     align-items: center !important;
     justify-content: space-between !important;
-    gap: 0.5rem !important;
+    gap: 0.75rem !important;
     width: 100% !important;
     max-width: 100% !important;
     height: auto !important;
     flex: 1 !important;
   }
 
-  .controls-left-group,
-  .controls-center-group,
-  .controls-right-group {
+  .controls-left-group {
     flex-direction: row !important;
     align-items: center !important;
-    gap: 0.5rem !important;
+    gap: 0.75rem !important;
     width: auto !important;
+    flex-shrink: 0 !important;
   }
 
   .controls-center-group {
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+    width: auto !important;
+    flex: 1 !important;
+    justify-content: center !important;
     padding-left: 0 !important;
   }
 
   .controls-right-group {
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+    width: auto !important;
+    flex-shrink: 0 !important;
     padding-left: 0 !important;
-    gap: 1rem !important;
   }
 
   .control-btn-circle {
     width: 48px !important;
     height: 48px !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* Hide menu button in PC mode */
+  .menu-pc-hide {
+    display: none !important;
   }
 }

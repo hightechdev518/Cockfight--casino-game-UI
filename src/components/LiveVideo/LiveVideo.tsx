@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CircularProgressbar, buildStyles } from 'react-circular-progressbar'
 import 'react-circular-progressbar/dist/styles.css'
-import { useGameStore } from '../../store/gameStore'
+import { useGameStore, useGameStore as getGameStore } from '../../store/gameStore'
 import { API_BASE_URL, apiService, sessionManager } from '../../services/apiService'
+import flvjs from 'flv.js'
 import './LiveVideo.css'
 
 // Dynamically load HLS.js if available (for Firefox and older browsers)
@@ -65,11 +66,11 @@ const WEBRTC_CONFIG = {
   // WebRTC signaling server base URL
   SIGNALING_BASE_URL: 'https://pulldev.jhf8888.com/tgglive',
   // Stream ID mapping for tables
-  // Pattern: CF01 -> 1012, CF02 -> 1022, CF03 -> 1032, etc.
-  // Formula: 10X2 where X is the table number
+  // Pattern: CF01 -> 1012, CF02 -> 1021, CF03 -> 1032, etc.
+  // Note: CF02 uses 1021 (not 1022) based on original site
   STREAM_ID_MAP: {
     'CF01': '1012',
-    'CF02': '1022', 
+    'CF02': '1021', // Updated based on original site
     'CF03': '1032',
     'CF04': '1042',
     'CF05': '1052',
@@ -133,8 +134,14 @@ const detectStreamType = (url: string): StreamType => {
   }
   
   // FLV patterns (common for Chinese streaming)
-  if (lowerUrl.includes('.flv') || lowerUrl.startsWith('ws://') || lowerUrl.startsWith('wss://')) {
+  // Note: WebSocket URLs might be FLV over WebSocket, but we'll handle them separately
+  if (lowerUrl.includes('.flv')) {
     return 'flv'
+  }
+  
+  // WebSocket URLs for FLV streaming
+  if (lowerUrl.startsWith('ws://') || lowerUrl.startsWith('wss://')) {
+    return 'flv' // Treat WebSocket as FLV stream
   }
   
   // iframe embed (for external players)
@@ -150,9 +157,9 @@ const detectStreamType = (url: string): StreamType => {
   return 'unknown'
 }
 
-/**
- * Extract all possible video URLs from lobbyinfo response
- */
+  /**
+   * Extract all possible video URLs from lobbyinfo response
+   */
 const extractVideoUrls = (data: any, tableId: string): { url: string; type: StreamType }[] => {
   const urls: { url: string; type: StreamType }[] = []
   
@@ -161,46 +168,128 @@ const extractVideoUrls = (data: any, tableId: string): { url: string; type: Stre
     'video_url', 'videoUrl', 'stream_url', 'streamUrl', 'live_url', 'liveUrl',
     'rtc_url', 'rtcUrl', 'webrtc_url', 'webrtcUrl', 'flv_url', 'flvUrl',
     'hls_url', 'hlsUrl', 'm3u8_url', 'm3u8Url', 'player_url', 'playerUrl',
-    'iframe_url', 'iframeUrl', 'embed_url', 'embedUrl'
+    'iframe_url', 'iframeUrl', 'embed_url', 'embedUrl', 'url', 'src'
   ]
   
-  // Check root level
-  for (const field of videoFields) {
-    if (data[field] && typeof data[field] === 'string') {
-      const type = detectStreamType(data[field])
-      urls.push({ url: data[field], type })
-    }
+  // Debug logging in development
+  if (import.meta.env.DEV) {
+    console.log('📺 Extracting video URLs from API response:', { data, tableId, isArray: Array.isArray(data) })
   }
   
-  // Check table-specific data
-  if (tableId && data[tableId]) {
-    const tableData = data[tableId]
+  // Check if data is an array (original site format: array of table objects)
+  if (Array.isArray(data)) {
+    // Search for matching table in array
+    for (const item of data) {
+      const itemTableId = item.tableid || item.tableId || item.t_id
+      if (itemTableId === tableId || itemTableId === tableId.toUpperCase() || itemTableId === tableId.toLowerCase()) {
+        // Found matching table - check for video URLs in this item
+        for (const field of videoFields) {
+          if (item[field] && typeof item[field] === 'string') {
+            const type = detectStreamType(item[field])
+            urls.push({ url: item[field], type })
+            if (import.meta.env.DEV) {
+              console.log(`📺 Found video URL in array item: ${field} = ${item[field]} (type: ${type})`)
+            }
+          }
+        }
+        
+        // Check nested video object in array item
+        if (item.video && typeof item.video === 'object') {
+          for (const field of videoFields) {
+            if (item.video[field] && typeof item.video[field] === 'string') {
+              const type = detectStreamType(item.video[field])
+              urls.push({ url: item.video[field], type })
+              if (import.meta.env.DEV) {
+                console.log(`📺 Found nested video URL in array item: video.${field} = ${item.video[field]} (type: ${type})`)
+              }
+            }
+          }
+        }
+        break
+      }
+    }
+  } else {
+    // Check root level (object format)
     for (const field of videoFields) {
-      if (tableData[field] && typeof tableData[field] === 'string') {
-        const type = detectStreamType(tableData[field])
-        urls.push({ url: tableData[field], type })
+      if (data[field] && typeof data[field] === 'string') {
+        const type = detectStreamType(data[field])
+        urls.push({ url: data[field], type })
+        if (import.meta.env.DEV) {
+          console.log(`📺 Found root level video URL: ${field} = ${data[field]} (type: ${type})`)
+        }
       }
     }
     
-    // Check nested video object
-    if (tableData.video && typeof tableData.video === 'object') {
+    // Check table-specific data
+    if (tableId && data[tableId]) {
+      const tableData = data[tableId]
       for (const field of videoFields) {
-        if (tableData.video[field] && typeof tableData.video[field] === 'string') {
-          const type = detectStreamType(tableData.video[field])
-          urls.push({ url: tableData.video[field], type })
+        if (tableData[field] && typeof tableData[field] === 'string') {
+          const type = detectStreamType(tableData[field])
+          urls.push({ url: tableData[field], type })
+          if (import.meta.env.DEV) {
+            console.log(`📺 Found table-specific video URL: ${tableId}.${field} = ${tableData[field]} (type: ${type})`)
+          }
+        }
+      }
+      
+      // Check nested video object
+      if (tableData.video && typeof tableData.video === 'object') {
+        for (const field of videoFields) {
+          if (tableData.video[field] && typeof tableData.video[field] === 'string') {
+            const type = detectStreamType(tableData.video[field])
+            urls.push({ url: tableData.video[field], type })
+            if (import.meta.env.DEV) {
+              console.log(`📺 Found nested video URL: ${tableId}.video.${field} = ${tableData.video[field]} (type: ${type})`)
+            }
+          }
+        }
+      }
+    }
+    
+    // Check streams array
+    if (Array.isArray(data.streams)) {
+      for (const stream of data.streams) {
+        if (stream.url) {
+          const type = detectStreamType(stream.url)
+          urls.push({ url: stream.url, type })
+          if (import.meta.env.DEV) {
+            console.log(`📺 Found stream array URL: ${stream.url} (type: ${type})`)
+          }
         }
       }
     }
   }
   
-  // Check streams array
-  if (Array.isArray(data.streams)) {
-    for (const stream of data.streams) {
-      if (stream.url) {
-        const type = detectStreamType(stream.url)
-        urls.push({ url: stream.url, type })
+  // Check all data keys for potential video URLs (more aggressive search)
+  if (urls.length === 0) {
+    const checkValue = (value: any, path: string = '') => {
+      if (typeof value === 'string' && value.length > 10) {
+        // Check if it looks like a URL
+        if (value.startsWith('http://') || value.startsWith('https://') || 
+            value.startsWith('ws://') || value.startsWith('wss://') ||
+            value.startsWith('rtmp://') || value.startsWith('rtsp://')) {
+          const type = detectStreamType(value)
+          if (type !== 'unknown') {
+            urls.push({ url: value, type })
+            if (import.meta.env.DEV) {
+              console.log(`📺 Found potential video URL at ${path}: ${value} (type: ${type})`)
+            }
+          }
+        }
+      } else if (typeof value === 'object' && value !== null) {
+        Object.keys(value).forEach(key => {
+          checkValue(value[key], path ? `${path}.${key}` : key)
+        })
       }
     }
+    
+    // Only do deep search if no URLs found
+    checkValue(data, 'root')
+  }
+  
+  if (import.meta.env.DEV) {
+    console.log(`📺 Total video URLs found: ${urls.length}`, urls)
   }
   
   return urls
@@ -220,7 +309,7 @@ interface LiveVideoProps {
  * Constants for the countdown progress bar
  */
 const COUNTDOWN_CONFIG = {
-  MAX_VALUE: 16,
+  MAX_VALUE: 20, // Betting countdown starts at 20 seconds
   PROGRESS_COLOR: '#00ff88',
   TRAIL_COLOR: 'rgba(0, 0, 0, 0.3)',
   TEXT_SIZE: '3.5rem',
@@ -242,17 +331,21 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null)
   const hlsRef = useRef<any>(null) // HLS.js instance
+  const flvRef = useRef<any>(null) // FLV.js instance
   const pcRef = useRef<RTCPeerConnection | null>(null) // WebRTC peer connection
   const [isPlaying, setIsPlaying] = useState<boolean>(autoPlay)
   const [videoError, setVideoError] = useState<boolean>(false)
   const [liveVideoUrl, setLiveVideoUrl] = useState<string>('')
   const [streamType, setStreamType] = useState<StreamType>('unknown')
   const [iframeUrl, setIframeUrl] = useState<string>('')
-  const { countdown, totalBet, tableId, roundId, currentRound, gameHistory } = useGameStore()
+  const { countdown, totalBet, tableId: storeTableId, roundId, currentRound, gameHistory, roundStatus } = useGameStore()
+  // Use tableId from store, but log if it seems wrong
+  const tableId = storeTableId
   const lastFetchTimeRef = useRef(0)
   const [winMessage, setWinMessage] = useState<{ text: string; type: 'meron' | 'wala' } | null>(null)
   const winMessageTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastShownRoundRef = useRef<number | null>(null)
+  const processedHistoryLengthRef = useRef<number>(0)
 
   /**
    * Cleanup WebRTC peer connection
@@ -261,6 +354,16 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
     if (pcRef.current) {
       pcRef.current.close()
       pcRef.current = null
+    }
+  }, [])
+
+  /**
+   * Cleanup FLV.js player
+   */
+  const cleanupFLV = useCallback(() => {
+    if (flvRef.current) {
+      flvRef.current.destroy()
+      flvRef.current = null
     }
   }, [])
 
@@ -402,10 +505,12 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
       
     } catch (error) {
       if (import.meta.env.DEV) {
-        console.error('WebRTC connection failed:', error)
+        console.error('📺 WebRTC connection failed:', error)
+        console.log('📺 Will attempt to fetch alternative video sources from API')
       }
-      setVideoError(true)
+      // Don't set error immediately - will try alternative sources
       cleanupWebRTC()
+      // Note: fetchVideoUrl will be called again by the polling mechanism
     }
   }, [cleanupWebRTC, tableId])
 
@@ -413,7 +518,15 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
    * Fetches live video URL from API and initializes WebRTC stream
    */
   const fetchVideoUrl = useCallback(async () => {
-    if (!tableId) return
+    // Get fresh tableId from store to avoid stale closures
+    const currentTableId = useGameStore.getState().tableId
+    
+    if (!currentTableId) {
+      if (import.meta.env.DEV) {
+        console.warn('📺 No tableId available for video fetch')
+      }
+      return
+    }
 
     // Throttle API calls - don't fetch more than once every 5 seconds
     const now = Date.now()
@@ -421,8 +534,18 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
     
     lastFetchTimeRef.current = now
 
+    if (import.meta.env.DEV) {
+      console.log('📺 Fetching video URL for table:', currentTableId)
+      if (currentTableId === 'E08') {
+        console.warn('⚠️ Using default tableId E08 - this might be wrong! Check URL parameter.')
+      }
+    }
+    
+    // Use currentTableId for all operations
+    const tableId = currentTableId
+
     try {
-      // Try to get video URL from lobbyinfo first
+      // Try to get video URL from lobbyinfo first (preferred method)
       if (sessionManager.getSessionId()) {
         try {
           const lobbyInfo = await apiService.getLobbyInfo()
@@ -435,8 +558,8 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
             
             // If any video URL found, use it
             if (videoUrls.length > 0) {
-              // Priority: WebRTC > HLS > FLV > iframe > MP4
-              const priorityOrder: StreamType[] = ['webrtc', 'hls', 'flv', 'iframe', 'mp4']
+              // Priority: HLS > FLV > iframe > MP4 > WebRTC (WebRTC last since it requires auth)
+              const priorityOrder: StreamType[] = ['hls', 'flv', 'iframe', 'mp4', 'webrtc']
               let selectedUrl: { url: string; type: StreamType } | null = null
               
               for (const priority of priorityOrder) {
@@ -452,6 +575,9 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
               }
               
               if (selectedUrl) {
+                if (import.meta.env.DEV) {
+                  console.log('📺 Selected video URL from API:', selectedUrl.url, 'Type:', selectedUrl.type)
+                }
                 setLiveVideoUrl(selectedUrl.url)
                 setStreamType(selectedUrl.type)
                 
@@ -461,39 +587,130 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
                   setIframeUrl('')
                 }
                 
+                // If WebRTC, connect to it
+                if (selectedUrl.type === 'webrtc') {
+                  connectWebRTC(selectedUrl.url)
+                }
+                
                 setVideoError(false)
                 return
               }
+            } else {
+              if (import.meta.env.DEV) {
+                console.log('📺 No video URLs found in lobbyinfo response for table:', tableId, '- this is normal, will use constructed FLV URL')
+              }
+            }
+          } else {
+            if (import.meta.env.DEV) {
+              console.warn('📺 Invalid lobbyinfo response:', lobbyInfo)
             }
           }
-        } catch {
-          // Failed to fetch video URL from lobbyinfo - will try WebRTC
+        } catch (error) {
+          // Failed to fetch video URL from lobbyinfo - will try fallbacks
+          if (import.meta.env.DEV) {
+            console.error('📺 Failed to fetch video URL from lobbyinfo:', error)
+          }
+        }
+      } else {
+        if (import.meta.env.DEV) {
+          console.warn('📺 No session ID available for video fetch')
         }
       }
 
-      // No video URL in lobbyinfo - use WebRTC with table mapping
+      // Fallback 1: Try FLV URL (same format as original site)
+      // Only try FLV if we have a valid session
       const streamId = getStreamIdForTable(tableId)
+      const sessId = sessionManager.getSessionId()
+      
+      if (streamId && sessId) {
+        const webrtcSessionId = generateWebRTCSessionId()
+        // Construct FLV URL exactly like original site
+        const flvUrl = `${WEBRTC_CONFIG.SIGNALING_BASE_URL}/${streamId}.flv?sessId=${sessId}&_session_id=${webrtcSessionId}`
+        
+        if (import.meta.env.DEV) {
+          console.log('📺 Attempting FLV stream (original site format) for table:', tableId, 'streamId:', streamId)
+          console.log('📺 FLV URL:', flvUrl)
+        }
+        
+        setLiveVideoUrl(flvUrl)
+        setStreamType('flv')
+        setVideoError(false)
+        // Note: If FLV fails with 404, error handler will trigger fallback
+        return
+      } else if (import.meta.env.DEV) {
+        console.log('📺 Skipping FLV - missing session or streamId:', { streamId, hasSession: !!sessId })
+      }
+
+      // Fallback 2: Try WebRTC with table mapping
       if (streamId && sessionManager.getSessionId()) {
+        if (import.meta.env.DEV) {
+          console.log('📺 Attempting WebRTC fallback for table:', tableId, 'streamId:', streamId)
+        }
         setStreamType('webrtc')
         setVideoError(false)
         connectWebRTC(streamId)
         return
       }
 
-      // No stream mapping found
-      setVideoError(true)
-    } catch {
-      setVideoError(true)
+      // Fallback 3: Try constructed HLS URL
+      const constructedHlsUrl = `https://vfile.dk77.bet/${tableId}/live.m3u8`
+      if (import.meta.env.DEV) {
+        console.log('📺 Trying constructed HLS URL:', constructedHlsUrl)
+      }
+      setLiveVideoUrl(constructedHlsUrl)
+      setStreamType('hls')
+      setVideoError(false)
+      return
+
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('📺 Error fetching video URL:', error)
+      }
+      // Don't set error immediately - try fallback first
+      const streamId = getStreamIdForTable(tableId)
+      if (streamId && sessionManager.getSessionId()) {
+        setStreamType('webrtc')
+        connectWebRTC(streamId)
+      } else {
+        setVideoError(true)
+      }
     }
   }, [tableId, connectWebRTC])
 
   /**
    * Sets up periodic video URL fetching
    * Note: Polling frequency reduced when WebSocket is connected (handled by WebSocket)
+   * Waits for session to be available before fetching
    */
   useEffect(() => {
-    // Initial fetch
-    fetchVideoUrl()
+    let retryCount = 0
+    const maxRetries = 5
+    
+    const tryFetchVideoUrl = () => {
+      // Check if session is available (or if we've retried enough times)
+      const hasSession = sessionManager.getSessionId()
+      
+      if (hasSession || retryCount >= maxRetries) {
+        if (import.meta.env.DEV) {
+          console.log('📺 Fetching video URL (session available or max retries reached)', {
+            hasSession,
+            retryCount,
+            tableId
+          })
+        }
+        fetchVideoUrl()
+      } else {
+        retryCount++
+        if (import.meta.env.DEV) {
+          console.log(`📺 Waiting for session before fetching video URL (retry ${retryCount}/${maxRetries})`)
+        }
+        // Retry after a delay
+        setTimeout(tryFetchVideoUrl, 1000)
+      }
+    }
+    
+    // Initial fetch attempt
+    tryFetchVideoUrl()
     
     // Poll every 30 seconds for video URL updates (reduced frequency)
     // WebSocket will provide instant updates when available
@@ -504,7 +721,7 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
     return () => {
       clearInterval(interval)
     }
-  }, [fetchVideoUrl])
+  }, [fetchVideoUrl, tableId])
 
   /**
    * Listens for WebSocket video URL updates
@@ -546,9 +763,26 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
   /**
    * Handles video error events
    */
-  const handleVideoError = useCallback(() => {
-    setVideoError(true)
-    fetchVideoUrl()
+  const handleVideoError = useCallback((event?: Event) => {
+    const video = videoRef.current
+    if (video && import.meta.env.DEV) {
+      console.error('📺 Video error:', {
+        error: video.error,
+        networkState: video.networkState,
+        readyState: video.readyState,
+        src: video.src,
+        currentSrc: video.currentSrc
+      })
+    }
+    // Don't immediately set error - give it a chance to recover
+    // Only set error if video is definitely not working
+    if (video && video.error && video.error.code !== 0) {
+      setVideoError(true)
+      // Retry fetching video URL after a delay
+      setTimeout(() => {
+        fetchVideoUrl()
+      }, 3000)
+    }
   }, [fetchVideoUrl])
 
   /**
@@ -598,13 +832,20 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
       return
     }
     
-    if (!videoUrl) return
+    // Don't load if URL is empty or if we're in error state (waiting for fallback)
+    if (!videoUrl || videoError) {
+      if (import.meta.env.DEV && videoError) {
+        console.log('📺 Skipping video load - waiting for fallback URL')
+      }
+      return
+    }
 
     // Clean up previous instances
     if (hlsRef.current) {
       hlsRef.current.destroy()
       hlsRef.current = null
     }
+    cleanupFLV()
     video.srcObject = null
 
     if (streamType === 'hls' || videoUrl.includes('.m3u8')) {
@@ -676,12 +917,126 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
         })()
       }
     } else if (streamType === 'flv') {
-      // FLV streams need flv.js library - try direct playback
-      video.src = videoUrl
-      video.load()
-      if (autoPlay) {
-        video.play().catch(() => {})
-      }
+      // FLV streams need flv.js library
+      (async () => {
+        try {
+          // Clean up previous FLV instance
+          cleanupFLV()
+          
+          if (flvjs.isSupported()) {
+            const flvPlayer = flvjs.createPlayer({
+              type: 'flv',
+              url: videoUrl,
+              isLive: true,
+              hasAudio: true,
+              hasVideo: true
+            }, {
+              enableWorker: false,
+              enableStashBuffer: false,
+              stashInitialSize: 128,
+              autoCleanupSourceBuffer: true,
+              autoCleanupMaxBackwardDuration: 3,
+              autoCleanupMinBackwardDuration: 2,
+              statisticsInfoReportInterval: 1000
+            })
+            
+            flvPlayer.attachMediaElement(video)
+            flvPlayer.load()
+            
+            flvPlayer.on(flvjs.Events.ERROR, (errorType: string, errorDetail: string, errorInfo: string) => {
+              if (import.meta.env.DEV) {
+                console.error('FLV.js error:', errorType, errorDetail, errorInfo)
+              }
+              
+              // Handle network errors (404, connection failed, etc.)
+              if (errorType === flvjs.ErrorTypes.NETWORK_ERROR) {
+                try {
+                  flvPlayer.unload()
+                  flvPlayer.detachMediaElement()
+                  flvPlayer.destroy()
+                  flvRef.current = null
+                  
+                  if (import.meta.env.DEV) {
+                    console.warn('📺 FLV stream failed (404 or network error), trying fallback sources')
+                  }
+                  
+                  // Try fallback sources immediately (don't wait)
+                  const currentTableId = useGameStore.getState().tableId
+                  const currentSession = sessionManager.getSessionId()
+                  
+                  if (import.meta.env.DEV) {
+                    console.log('📺 FLV failed, attempting fallback immediately:', {
+                      tableId: currentTableId,
+                      hasSession: !!currentSession
+                    })
+                  }
+                  
+                  if (currentTableId) {
+                    // Try WebRTC as fallback (requires session)
+                    const streamId = getStreamIdForTable(currentTableId)
+                    if (streamId && currentSession) {
+                      if (import.meta.env.DEV) {
+                        console.log('📺 Trying WebRTC fallback after FLV failure')
+                      }
+                      setStreamType('webrtc')
+                      setVideoError(false)
+                      connectWebRTC(streamId)
+                    } else if (currentSession) {
+                      // Session available but no streamId - retry fetch after delay
+                      if (import.meta.env.DEV) {
+                        console.log('📺 Session available but no streamId, will retry fetch')
+                      }
+                      setTimeout(() => {
+                        fetchVideoUrl()
+                      }, 2000)
+                    } else {
+                      // No session yet - try HLS as fallback (doesn't require session)
+                      const hlsUrl = `https://vfile.dk77.bet/${currentTableId}/live.m3u8`
+                      if (import.meta.env.DEV) {
+                        console.log('📺 No session available, trying HLS fallback:', hlsUrl)
+                      }
+                      setLiveVideoUrl(hlsUrl)
+                      setStreamType('hls')
+                      setVideoError(false)
+                    }
+                  }
+                } catch (e) {
+                  if (import.meta.env.DEV) {
+                    console.error('FLV recovery failed:', e)
+                  }
+                }
+                setVideoError(true)
+              } else if (errorType === flvjs.ErrorTypes.MEDIA_ERROR) {
+                // Try to recover from media errors
+                try {
+                  flvPlayer.unload()
+                  flvPlayer.load()
+                } catch (e) {
+                  if (import.meta.env.DEV) {
+                    console.error('FLV media error recovery failed:', e)
+                  }
+                  setVideoError(true)
+                }
+              }
+            })
+            
+            flvRef.current = flvPlayer
+            
+            if (autoPlay) {
+              video.play().catch(() => {
+                // Autoplay may be blocked
+              })
+            }
+          } else {
+            // FLV.js not supported - try iframe fallback
+            console.warn('FLV.js not supported in this browser')
+            setVideoError(true)
+          }
+        } catch (error) {
+          console.error('FLV.js initialization failed:', error)
+          setVideoError(true)
+        }
+      })()
     } else {
       // Regular MP4 or other format
       video.src = videoUrl
@@ -698,17 +1053,19 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
         hlsRef.current.destroy()
         hlsRef.current = null
       }
+      cleanupFLV()
     }
-  }, [videoUrl, streamType, iframeUrl, autoPlay])
+  }, [videoUrl, streamType, iframeUrl, autoPlay, cleanupFLV])
 
   /**
-   * Cleanup WebRTC on unmount
+   * Cleanup WebRTC and FLV on unmount
    */
   useEffect(() => {
     return () => {
       cleanupWebRTC()
+      cleanupFLV()
     }
-  }, [cleanupWebRTC])
+  }, [cleanupWebRTC, cleanupFLV])
 
   /**
    * Sets up video event listeners and autoplay
@@ -766,7 +1123,7 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
    * Calculates progress percentage for countdown
    */
   const progressPercentage = useMemo(() => {
-    if (countdown === undefined) return 0
+    if (countdown === undefined || countdown <= 0) return 0
     return (countdown / COUNTDOWN_CONFIG.MAX_VALUE) * 100
   }, [countdown])
 
@@ -782,10 +1139,85 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
 
   /**
    * Determines if countdown badge should be visible
+   * Timer only shows when countdown > 0 AND roundStatus === 1 (betting period)
+   * Timer disappears when countdown reaches 0 or when fighting starts (roundStatus === 2)
    */
   const isCountdownVisible = useMemo(() => {
-    return countdown !== undefined && countdown >= 0
+    return countdown !== undefined && countdown > 0 && roundStatus === 1
+  }, [countdown, roundStatus])
+  
+  /**
+   * Countdown timer interval - decrements countdown every second
+   * Only runs when countdown > 0 AND roundStatus === 1 (betting period)
+   * Timer stops when roundStatus === 2 (fighting)
+   */
+  useEffect(() => {
+    const { roundStatus: currentRoundStatus } = useGameStore.getState()
+    
+    // Timer only counts down during betting period (roundStatus === 1)
+    // When fighting (roundStatus === 2), timer stops
+    if (countdown === undefined || countdown <= 0 || currentRoundStatus !== 1) {
+      // Clear countdown when it reaches 0, is undefined, or fighting starts
+      if (countdown === 0) {
+        const { updateGameStatus } = useGameStore.getState()
+        // Don't set roundStatus here - let WebSocket be the source of truth
+        // WebSocket will send roundstatus: 2 when betting actually closes
+        updateGameStatus({
+          countdown: undefined // Hide timer only
+        })
+        if (import.meta.env.DEV) {
+          console.log('⏰ Countdown finished, hiding timer. WebSocket will update roundStatus.')
+        }
+      }
+      return
+    }
+    
+    // Decrement countdown every second, but only during betting period
+    const interval = setInterval(() => {
+      const { countdown: currentCountdown, roundStatus: storeRoundStatus, updateGameStatus } = useGameStore.getState()
+      
+      // Stop counting if fighting started (roundStatus !== 1)
+      if (storeRoundStatus !== 1) {
+        if (import.meta.env.DEV) {
+          console.log('⏰ Timer stopped - fighting started (roundStatus !== 1)')
+        }
+        return
+      }
+      
+      if (currentCountdown !== undefined && currentCountdown > 0) {
+        const newCountdown = currentCountdown - 1
+        updateGameStatus({ countdown: newCountdown })
+        
+        if (newCountdown === 0) {
+          // Countdown finished - hide timer
+          // Don't set roundStatus here - let WebSocket be the source of truth
+          // WebSocket will send roundstatus: 2 when betting actually closes
+          updateGameStatus({
+            countdown: undefined // Hide timer only
+          })
+          if (import.meta.env.DEV) {
+            console.log('⏰ Countdown finished, hiding timer. WebSocket will update roundStatus.')
+          }
+        }
+      }
+    }, 1000)
+    
+    return () => clearInterval(interval)
   }, [countdown])
+
+  /**
+   * Clear countdown when fighting starts (roundStatus === 2)
+   * This ensures timer is hidden immediately when fighting begins
+   */
+  useEffect(() => {
+    if (roundStatus === 2 && countdown !== undefined) {
+      const { updateGameStatus } = useGameStore.getState()
+      updateGameStatus({ countdown: undefined })
+      if (import.meta.env.DEV) {
+        console.log('⛔ Fighting started (roundStatus === 2), clearing countdown timer from LiveVideo')
+      }
+    }
+  }, [roundStatus, countdown])
 
   /**
    * Builds styles for the circular progress bar
@@ -816,37 +1248,91 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
   /**
    * Gets the latest game result and shows win message if meron or wala wins
    * Only shows message for new results (not already displayed)
+   * Also starts the betting countdown timer (20 seconds) after game result
    */
   useEffect(() => {
-    if (gameHistory.length === 0) return
+    if (gameHistory.length === 0) {
+      // Reset processed length when history is cleared
+      processedHistoryLengthRef.current = 0
+      return
+    }
 
     const latestResult = gameHistory[gameHistory.length - 1]
+    const currentHistoryLength = gameHistory.length
     
-    // Check if this is a new result we haven't shown yet
-    const isNewResult = lastShownRoundRef.current === null || 
-                        lastShownRoundRef.current !== latestResult.round
+    // Check if this is a truly new result by comparing history length
+    // This works better than round number because it detects when new results are added
+    const isNewResult = currentHistoryLength > processedHistoryLengthRef.current
     
-    // Only show message for meron or wala wins (not draw) and if it's a new result
-    if ((latestResult.result === 'meron' || latestResult.result === 'wala') && isNewResult) {
-      // Mark this round as shown
+    if (isNewResult && latestResult.round > 0) {
+      // Mark this history length as processed
+      const previousLength = processedHistoryLengthRef.current
+      processedHistoryLengthRef.current = currentHistoryLength
+      const previousRound = lastShownRoundRef.current
       lastShownRoundRef.current = latestResult.round
       
-      // Clear any existing timeout
-      if (winMessageTimeoutRef.current) {
-        clearTimeout(winMessageTimeoutRef.current)
+      // Show win message only for meron or wala wins (not draw)
+      // Show immediately when NEW result is received (not on first page load)
+      // Only show if this is a real-time update (previousLength > 0 means we've processed at least one result before)
+      if ((latestResult.result === 'meron' || latestResult.result === 'wala') && previousLength > 0) {
+        // Clear any existing timeout
+        if (winMessageTimeoutRef.current) {
+          clearTimeout(winMessageTimeoutRef.current)
+        }
+
+        // Set win message
+        setWinMessage({
+          text: latestResult.result === 'meron' ? 'Meron Win' : 'Wala Win',
+          type: latestResult.result
+        })
+
+        if (import.meta.env.DEV) {
+          console.log('🎉 Showing win message for new result:', {
+            round: latestResult.round,
+            result: latestResult.result,
+            previousRound: previousRound,
+            previousLength: previousLength,
+            currentLength: currentHistoryLength
+          })
+        }
+
+        // Hide message after 5 seconds
+        winMessageTimeoutRef.current = setTimeout(() => {
+          setWinMessage(null)
+          winMessageTimeoutRef.current = null
+        }, 5000)
+      } else if (import.meta.env.DEV && previousLength === 0) {
+        // First load - don't show message, just mark as processed
+        console.log('ℹ️ First page load - not showing win message. Waiting for new game result:', {
+          round: latestResult.round,
+          result: latestResult.result
+        })
       }
-
-      // Set win message
-      setWinMessage({
-        text: latestResult.result === 'meron' ? 'Meron Win' : 'Wala Win',
-        type: latestResult.result
-      })
-
-      // Hide message after 5 seconds
-      winMessageTimeoutRef.current = setTimeout(() => {
-        setWinMessage(null)
-        winMessageTimeoutRef.current = null
-      }, 5000)
+      
+      // Start timer for ANY new result (meron, wala, or draw)
+      // IMPORTANT: Only start timer if this is a NEW result (not on page load/refresh)
+      // We check if previousLength > 0 (not first load) - if so, start timer
+      // Timer should only start when a NEW result comes in AFTER page load
+      if (previousLength > 0) {
+        // Start betting countdown timer (20 seconds) after game result
+        const { updateGameStatus, countdown: currentCountdown } = useGameStore.getState()
+        
+        // Always start/reset timer when new result is received (even if timer is running)
+        // This ensures timer starts fresh for each new round result
+        updateGameStatus({
+          countdown: 20,
+          roundStatus: 1 // Set to betting open
+        })
+        
+        if (import.meta.env.DEV) {
+          console.log('✅ Game result received in LiveVideo, starting 20-second betting timer:', {
+            round: latestResult.round,
+            result: latestResult.result,
+            previousCountdown: currentCountdown,
+            newCountdown: 20
+          })
+        }
+      }
     }
 
     return () => {
@@ -934,24 +1420,6 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
         </div>
       </div>
 
-      {/* API Info Badge */}
-      <div className="video-overlay-api" aria-live="polite">
-        <div className="api-url-badge">
-          <span className="api-url-label">Backend API</span>
-          <span className="api-url-value" title={LOBBY_INFO_ENDPOINT}>
-            {LOBBY_INFO_ENDPOINT}
-          </span>
-          <span className="api-stream-type">
-            Type: {streamType || 'detecting...'}
-          </span>
-          <span
-            className="api-stream-value"
-            title={liveVideoUrl || iframeUrl || 'Stream URL loading...'}
-          >
-            {liveVideoUrl || iframeUrl ? `Stream: ${liveVideoUrl || iframeUrl}` : 'Waiting for stream URL from API...'}
-          </span>
-        </div>
-      </div>
 
       {/* Countdown Badge */}
       {isCountdownVisible && (
@@ -1012,7 +1480,7 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
             loop={false}
             onError={handleVideoError}
             onLoadedData={handleVideoLoaded}
-            style={{ display: videoError ? 'none' : 'block' }}
+            style={{ display: (videoError && !liveVideoUrl && !iframeUrl) ? 'none' : 'block' }}
           >
             {videoUrl && streamType !== 'webrtc' && (
               <source src={videoUrl} type={videoUrl.includes('.m3u8') ? 'application/x-mpegURL' : 'video/mp4'} />

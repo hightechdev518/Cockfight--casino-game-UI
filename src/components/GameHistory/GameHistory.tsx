@@ -53,79 +53,92 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
 
   /**
    * Parses API response and converts to GameHistory format
-   * According to backend README: Returns drawresult:{tableid} plus accu, roadmap, goodroad, and allgr
+   * Original site structure: { code: "B100", data: [...array of history items...], accu: {...}, roadmap: {...} }
+   * Each item: { tableid: "CF01", trid: 1265634, drawresult: "\"M\"", result1: "M", status: 4, ... }
    */
-  const parseApiHistory = useCallback((apiData: any): GameHistoryType[] => {
+  const parseApiHistory = useCallback((apiData: any, currentTableId?: string): GameHistoryType[] => {
     if (!apiData) return []
     
-    // The API returns: drawresult:{tableid} plus accu, roadmap, goodroad, and allgr
-    // Standard response format: { code: "B100", msg: "...", data: { ... } }
+    // Get current tableId from store if not provided
+    const tableIdToUse = currentTableId || tableId
+    
+    if (import.meta.env.DEV) {
+      console.log('📋 Parsing history API response:', { apiData, tableId: tableIdToUse })
+    }
+    
     let drawResults: any[] = []
     
-    // Handle standard API response format
-    if (apiData.data) {
-      // Check for drawresult key (most likely structure)
-      if (apiData.data.drawresult && Array.isArray(apiData.data.drawresult)) {
-        drawResults = apiData.data.drawresult
-      } 
-      // Check if data itself is an array (drawresult might be the array)
-      else if (Array.isArray(apiData.data)) {
-        drawResults = apiData.data
-      }
-      // Check for nested data structure
-      else if (apiData.data.data && Array.isArray(apiData.data.data)) {
-        drawResults = apiData.data.data
-      }
-      // Try to find any array in the data object
-      else if (typeof apiData.data === 'object') {
-        const keys = Object.keys(apiData.data)
-        // Look for drawresult key first
-        const drawresultKey = keys.find(k => k.toLowerCase().includes('drawresult') || k.toLowerCase().includes('draw'))
-        if (drawresultKey && Array.isArray(apiData.data[drawresultKey])) {
-          drawResults = apiData.data[drawresultKey]
+    // Original site structure: data is a direct array of history items
+    if (apiData.data && Array.isArray(apiData.data)) {
+      // Filter by tableid to get only current table's results
+      if (tableIdToUse) {
+        drawResults = apiData.data.filter((item: any) => 
+          (item.tableid === tableIdToUse || item.tableId === tableIdToUse || item.t_id === tableIdToUse)
+        )
+        if (import.meta.env.DEV) {
+          console.log('✅ Found', drawResults.length, 'results for table:', tableIdToUse, 'out of', apiData.data.length, 'total items')
         }
-        // Otherwise, find first array
-        else {
-          for (const key of keys) {
-            if (Array.isArray(apiData.data[key])) {
-              drawResults = apiData.data[key]
-              break
-            }
-          }
+      } else {
+        // No tableId filter, use all results
+        drawResults = apiData.data
+        if (import.meta.env.DEV) {
+          console.log('✅ Using all results (no tableId filter), count:', drawResults.length)
         }
       }
     }
-    // Handle case where response might be direct array (public_history.php might return this)
+    // Fallback: Check if data is nested under drawresult
+    else if (apiData.data && apiData.data.drawresult) {
+      if (typeof apiData.data.drawresult === 'object' && !Array.isArray(apiData.data.drawresult)) {
+        // drawresult is an object with table IDs as keys
+        if (tableIdToUse && apiData.data.drawresult[tableIdToUse]) {
+          drawResults = Array.isArray(apiData.data.drawresult[tableIdToUse]) 
+            ? apiData.data.drawresult[tableIdToUse]
+            : []
+        }
+      } else if (Array.isArray(apiData.data.drawresult)) {
+        drawResults = apiData.data.drawresult
+      }
+    }
+    // Fallback: Response is direct array
     else if (Array.isArray(apiData)) {
       drawResults = apiData
     }
+    
+    if (import.meta.env.DEV && drawResults.length === 0) {
+      console.warn('⚠️ No draw results found in API response. Available keys:', apiData.data ? Object.keys(apiData.data) : 'no data')
+    }
 
     // Convert API format to GameHistory format
+    // Original site format: { tableid: "CF01", trid: 1265634, drawresult: "\"M\"", result1: "M", status: 4, ... }
     return drawResults.map((item: any, index: number) => {
-      // Handle different possible field names for round number
-      const round = item.r_no || item.round || item.r_id || item.rno || item.round_no || (index + 1)
+      // Use trid as round number (round ID), or fallback to index
+      const round = item.trid || item.r_no || item.round || item.r_id || item.rno || item.round_no || (index + 1)
       
-      // Handle different possible field names for result
-      // Backend likely uses: M=meron, W=wala, D=draw or similar codes
-      const result = item.result || item.winner || item.win || item.winner_type || item.bet_result || item.outcome || ''
+      // Original site uses result1 (clean) or drawresult (JSON string like "\"M\"")
+      // Prefer result1 as it's already clean, fallback to parsing drawresult
+      let result = item.result1 || item.result || item.winner || item.win || item.winner_type || item.bet_result || item.outcome || ''
+      
+      // If result is a JSON string like "\"M\"", parse it
+      if (typeof result === 'string' && result.startsWith('"') && result.endsWith('"')) {
+        try {
+          result = JSON.parse(result)
+        } catch (e) {
+          // If parsing fails, use as-is
+        }
+      }
       
       // Map result to our format
       let mappedResult: 'meron' | 'wala' | 'draw' = 'meron'
       if (typeof result === 'string') {
-        const resultLower = result.toLowerCase().trim()
-        // Check for meron indicators
-        if (resultLower === 'm' || resultLower === 'meron' || resultLower === '龍' || 
-            resultLower === '21001' || resultLower.includes('meron')) {
+        const resultUpper = result.toUpperCase().trim()
+        // Original site uses: M=meron, W=wala, D=draw
+        if (resultUpper === 'M' || resultUpper === 'MERON' || resultUpper === '龍') {
           mappedResult = 'meron'
         } 
-        // Check for wala indicators
-        else if (resultLower === 'w' || resultLower === 'wala' || resultLower === '虎' || 
-                 resultLower === '21002' || resultLower.includes('wala')) {
+        else if (resultUpper === 'W' || resultUpper === 'WALA' || resultUpper === '虎') {
           mappedResult = 'wala'
         } 
-        // Check for draw indicators
-        else if (resultLower === 'd' || resultLower === 'draw' || resultLower === '和' || 
-                 resultLower === '21003' || resultLower.includes('draw')) {
+        else if (resultUpper === 'D' || resultUpper === 'DRAW' || resultUpper === '和') {
           mappedResult = 'draw'
         }
       } else if (typeof result === 'number') {
@@ -142,7 +155,7 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
         walaCard: item.walaCard || item.w_card || item.wala_card
       }
     }).filter((item: GameHistoryType) => item.round > 0) // Filter out invalid entries
-  }, [])
+  }, [tableId])
 
   /**
    * Fetches history from API
@@ -180,31 +193,77 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
                                  (historyData.code && historyData.code !== 'B100')
         
         if (historyData.code === 'B100' || (isPublicEndpoint && historyData.data)) {
-          const parsedHistory = parseApiHistory(historyData)
+          const parsedHistory = parseApiHistory(historyData, tableId)
           if (parsedHistory.length > 0) {
             setGameHistory(parsedHistory)
-            // Successfully parsed history
+            if (import.meta.env.DEV) {
+              console.log('✅ Successfully parsed history, count:', parsedHistory.length)
+            }
           } else {
             // If parsing returned empty, clear history to show only real data
             setGameHistory([])
-            // History parsing returned empty array
+            if (import.meta.env.DEV) {
+              console.warn('⚠️ History parsing returned empty array')
+            }
           }
 
           // Extract accu (accumulation) data for statistics
-          // According to backend README: Returns accu, roadmap, goodroad, and allgr
-          if (historyData.data) {
-            const accu = historyData.data.accu
-            if (accu && typeof accu === 'object') {
-              // Parse accu data - format may vary, handle different structures
-              const meronWins = accu.meron || accu.M || accu.meronWins || accu.meron_count || 0
-              const walaWins = accu.wala || accu.W || accu.walaWins || accu.wala_count || 0
-              const drawWins = accu.draw || accu.D || accu.drawWins || accu.draw_count || 0
+          // Original site structure: accu is at root level, format: { "21000@M": 52, "21000@W": 42, "21000@D": 6 }
+          // The format is "21000@{M|W|D}" where 21000 might be a game/product ID
+          let accu = historyData.accu || (historyData.data && historyData.data.accu)
+          
+          if (import.meta.env.DEV) {
+            console.log('📊 Looking for accu data, tableId:', tableId)
+            console.log('📊 Raw accu data:', accu, 'Type:', typeof accu, 'IsArray:', Array.isArray(accu))
+          }
+          
+          if (accu && typeof accu === 'object' && !Array.isArray(accu)) {
+            // Original site format: { "21000@M": 52, "21000@W": 42, "21000@D": 6 }
+            // Try to find keys matching pattern: "21000@M", "21000@W", "21000@D"
+            let meronWins = 0
+            let walaWins = 0
+            let drawWins = 0
+            
+            // Try direct field names first (fallback format)
+            if (accu.meron !== undefined || accu.M !== undefined) {
+              meronWins = accu.meron || accu.M || accu.meronWins || accu.meron_count || 0
+              walaWins = accu.wala || accu.W || accu.walaWins || accu.wala_count || 0
+              drawWins = accu.draw || accu.D || accu.drawWins || accu.draw_count || 0
+            } else {
+              // Original site format: search for keys like "21000@M", "21000@W", "21000@D"
+              const accuKeys = Object.keys(accu)
+              if (import.meta.env.DEV) {
+                console.log('📊 All accu keys:', accuKeys)
+              }
               
-              setAccuStats({
-                meronWins: typeof meronWins === 'number' ? meronWins : parseInt(String(meronWins)) || 0,
-                walaWins: typeof walaWins === 'number' ? walaWins : parseInt(String(walaWins)) || 0,
-                drawWins: typeof drawWins === 'number' ? drawWins : parseInt(String(drawWins)) || 0
-              })
+              // Find keys matching pattern: *@M, *@W, *@D
+              for (const key of accuKeys) {
+                if (key.endsWith('@M') || key.endsWith('@M@NOOPEN')) {
+                  meronWins += typeof accu[key] === 'number' ? accu[key] : parseInt(String(accu[key])) || 0
+                } else if (key.endsWith('@W') || key.endsWith('@W@NOOPEN')) {
+                  walaWins += typeof accu[key] === 'number' ? accu[key] : parseInt(String(accu[key])) || 0
+                } else if (key.endsWith('@D') || key.endsWith('@D@NOOPEN')) {
+                  drawWins += typeof accu[key] === 'number' ? accu[key] : parseInt(String(accu[key])) || 0
+                }
+              }
+            }
+            
+            if (import.meta.env.DEV) {
+              console.log('📊 Parsed accu stats:', { meronWins, walaWins, drawWins })
+            }
+            
+            setAccuStats({
+              meronWins: meronWins,
+              walaWins: walaWins,
+              drawWins: drawWins
+            })
+            
+            if (import.meta.env.DEV) {
+              console.log('✅ Extracted accu stats:', { meronWins, walaWins, drawWins })
+            }
+          } else {
+            if (import.meta.env.DEV) {
+              console.warn('⚠️ No accu data found in response. Available root keys:', Object.keys(historyData || {}))
             }
           }
 
@@ -313,6 +372,7 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
    * - Same consecutive result = stack vertically (same column)
    * - Different result = new column (horizontal)
    * - When column is full (6 rows), continue in next column
+   * - Newest results appear on the left (reverse order)
    */
   const generateBeadRoad = useMemo((): BeadRoadItem[] => {
     if (history.length === 0) return []
@@ -322,8 +382,11 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
     let currentRow = 0
     let lastResult: 'meron' | 'wala' | 'draw' | null = null
 
-    // Process each game result
-    history.forEach((item) => {
+    // Reverse history so newest appears on the left
+    const reversedHistory = [...history].reverse()
+
+    // Process each game result (newest first)
+    reversedHistory.forEach((item) => {
       const result = item.result
 
       if (lastResult === null) {
@@ -370,12 +433,12 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
   }, [generateBeadRoad])
 
   /**
-   * Auto-scroll to show newest results (rightmost columns)
+   * Auto-scroll to show newest results (leftmost columns after reversal)
    */
   useEffect(() => {
     if (roadmapContainerRef.current && generateBeadRoad.length > 0) {
-      // Scroll to the right to show newest results
-      roadmapContainerRef.current.scrollLeft = roadmapContainerRef.current.scrollWidth
+      // Scroll to the left to show newest results (they're now on the left)
+      roadmapContainerRef.current.scrollLeft = 0
     }
   }, [generateBeadRoad])
 
@@ -480,8 +543,8 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
             gridTemplateColumns: `repeat(${Math.min(maxColumn, 12)}, 1fr)`,
           }}
         >
-          {/* Render bead road items - show last 72 results max (6 rows x 12 cols) */}
-          {generateBeadRoad.slice(-72).map((item, index) => (
+          {/* Render bead road items - show first 72 results max (6 rows x 12 cols) - newest on left */}
+          {generateBeadRoad.slice(0, 72).map((item, index) => (
             <div
               key={`simple-bead-${index}`}
               className={`bead-item-simple ${getBeadColor(item.result)}`}
