@@ -21,6 +21,8 @@ interface ControlsProps {
   isSubmitting?: boolean
   /** Round status: 1 = betting open, 2 = fighting/betting closed, 4 = settled */
   roundStatus?: number
+  /** Number of confirmed bets (bets that have been submitted) */
+  confirmedBetsCount?: number
 }
 
 /**
@@ -29,13 +31,24 @@ interface ControlsProps {
  * @param props - Component props
  * @returns JSX element
  */
-const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onUndo, chipSlot, pendingBetAmount = 0, isSubmitting = false, roundStatus }) => {
+const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onUndo, chipSlot, pendingBetAmount = 0, isSubmitting = false, roundStatus, confirmedBetsCount = 0 }) => {
   /**
    * Handles refresh button click - reloads the page
+   * Disabled if there are confirmed bets to prevent changing betting values
    */
   const handleRefresh = useCallback(() => {
+    // Don't refresh if there are confirmed bets
+    if (confirmedBetsCount > 0) {
+      return
+    }
     window.location.reload()
-  }, [])
+  }, [confirmedBetsCount])
+  
+  /**
+   * Check if refresh button should be disabled
+   * Disabled when: there are confirmed bets or bets are being submitted
+   */
+  const isRefreshDisabled = confirmedBetsCount > 0 || isSubmitting
 
   /**
    * Handles lobby button click
@@ -111,9 +124,11 @@ const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onUnd
           </svg>
         </button>
         <button 
-          className="control-btn-circle refresh" 
+          className={`control-btn-circle refresh ${isRefreshDisabled ? 'disabled' : ''}`}
           onClick={handleRefresh}
+          disabled={isRefreshDisabled}
           aria-label="Refresh"
+          aria-disabled={isRefreshDisabled}
           type="button"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

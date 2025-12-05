@@ -381,22 +381,73 @@ export const apiService = {
     formData.append('zone', request.zone)
     formData.append('amount', request.amount.toString())
     formData.append('odds', request.odds.toString())
-    formData.append('uniqueid', generateUniqueId())
+    const uniqueId = generateUniqueId()
+    formData.append('uniqueid', uniqueId)
     if (request.cuid) formData.append('cuid', request.cuid)
     if (request.anyodds) formData.append('anyodds', request.anyodds)
 
-    // Use wager_rid.php endpoint (same as original site)
+    // Log the bet request data being sent to server
+    if (import.meta.env.DEV) {
+      console.log('📤 Sending bet to server:', {
+        endpoint: '/bet_cflive.php',
+        data: {
+          sess_id: sessId,
+          t_id: request.t_id,
+          r_id: request.r_id,
+          type: request.type,
+          zone: request.zone,
+          amount: request.amount,
+          odds: request.odds,
+          uniqueid: uniqueId,
+          cuid: request.cuid,
+          anyodds: request.anyodds
+        },
+        formData: formData.toString()
+      })
+    }
+
+    // Use bet_cflive.php endpoint (cockfight betting handler per server rules)
     // Add headers to match original site's request format
-    const response = await formClient.post<BetResponse>('/wager_rid.php', formData.toString(), {
+    const response = await formClient.post<BetResponse>('/bet_cflive.php', formData.toString(), {
       headers: {
         'Origin': 'https://game.ho8.net',
         'Referer': 'https://game.ho8.net/',
       },
     })
     
+    // Log the server response
+    if (import.meta.env.DEV) {
+      console.log('📥 Server response:', {
+        code: response.data.code,
+        msg: response.data.msg,
+        balance: response.data.balance,
+        unsettle: response.data.unsettle,
+        allbets: response.data.allbets,
+        fullResponse: response.data
+      })
+    }
+    
     if (response.data.code !== 'B100') {
       const errorMsg = ERROR_CODES[response.data.code] || response.data.msg || 'Betting failed'
+      if (import.meta.env.DEV) {
+        console.error('❌ Betting failed:', {
+          code: response.data.code,
+          error: errorMsg,
+          fullResponse: response.data
+        })
+      }
       throw new Error(`${response.data.code}: ${errorMsg}`)
+    }
+
+    if (import.meta.env.DEV) {
+      console.log('✅ Bet successfully placed:', {
+        amount: request.amount,
+        type: request.type,
+        zone: request.zone,
+        odds: request.odds,
+        newBalance: response.data.balance,
+        wagerNumbers: response.data.unsettle?.map(b => b.w_no) || []
+      })
     }
 
     return response.data

@@ -6,7 +6,7 @@ import SuccessOverlay from '../Controls/SuccessOverlay'
 import Controls from '../Controls/Controls'
 import AccountInfo from '../AccountInfo/AccountInfo'
 import { apiService, sessionManager } from '../../services/apiService'
-import { mapBetTypeToBackend } from '../../utils/betMapping'
+import { mapBetTypeToBackend, getBetTypeDisplayName } from '../../utils/betMapping'
 import './BettingInterface.css'
 
 /**
@@ -43,7 +43,8 @@ const BettingInterface: React.FC = () => {
     countdown,
     setAccountBalance, 
     setBettingError,
-    bettingError
+    bettingError,
+    bets // Confirmed bets that have been submitted
   } = useGameStore()
   const [pendingBets, setPendingBets] = useState<Map<BetType, number>>(new Map())
   // Track which bet type is currently active (locked in) - only one panel can be bet at a time
@@ -62,6 +63,34 @@ const BettingInterface: React.FC = () => {
   const [oddsMap, setOddsMap] = useState<Map<string, number>>(new Map()) // Map zone -> odds
   const successTimerRef = useRef<number | null>(null)
   const [shakingBetType, setShakingBetType] = useState<BetType | null>(null)
+
+  /**
+   * Determines which main bet type has been confirmed in the current round
+   * Once a main bet (meron/wala/draw) is confirmed, other main bets are disabled
+   */
+  const confirmedMainBetType = useMemo(() => {
+    // Check if any confirmed bets exist for main bet types
+    const mainBetTypes: BetType[] = ['meron', 'wala', 'draw']
+    for (const bet of bets) {
+      if (mainBetTypes.includes(bet.type)) {
+        return bet.type as 'meron' | 'wala' | 'draw'
+      }
+    }
+    return null
+  }, [bets])
+
+  /**
+   * Checks if a main bet type should be disabled
+   * A main bet is disabled if another main bet has been confirmed
+   */
+  const isMainBetDisabled = useCallback((betType: 'meron' | 'wala' | 'draw'): boolean => {
+    // If no main bet is confirmed, all are enabled
+    if (!confirmedMainBetType) return false
+    // If this bet type is confirmed, it's enabled (user can add more to it)
+    if (confirmedMainBetType === betType) return false
+    // If another main bet is confirmed, this one is disabled
+    return true
+  }, [confirmedMainBetType])
 
   /**
    * Fetches odds from API for the current round
@@ -126,6 +155,16 @@ const BettingInterface: React.FC = () => {
   useEffect(() => {
     fetchOdds()
   }, [fetchOdds])
+
+  // Reset activeBetType when roundId changes (new round started)
+  useEffect(() => {
+    if (roundId) {
+      setActiveBetType(null)
+      if (import.meta.env.DEV) {
+        console.log('🔄 Round changed, resetting activeBetType. New roundId:', roundId)
+      }
+    }
+  }, [roundId])
 
   // Try to fetch roundId if missing
   useEffect(() => {
@@ -205,6 +244,15 @@ const BettingInterface: React.FC = () => {
    * @param betType - Type of bet to place
    */
   const handleBetClick = useCallback((betType: BetType) => {
+    // Check if this is a main bet type and if it's disabled
+    const mainBetTypes: BetType[] = ['meron', 'wala', 'draw']
+    if (mainBetTypes.includes(betType)) {
+      if (isMainBetDisabled(betType as 'meron' | 'wala' | 'draw')) {
+        setBettingError(`You have already placed a bet on ${getBetTypeDisplayName(confirmedMainBetType!)}. You cannot bet on ${getBetTypeDisplayName(betType)} in the same round.`)
+        return
+      }
+    }
+    
     if (selectedChip <= 0) {
       if (import.meta.env.DEV) {
         console.warn('⚠️ Betting blocked - selectedChip is 0 or negative:', selectedChip)
@@ -432,20 +480,60 @@ const BettingInterface: React.FC = () => {
         }
 
         try {
+          const betAmount = Math.abs(amount) // Ensure positive amount
+          
+          if (import.meta.env.DEV) {
+            console.log('🎲 Preparing to place bet:', {
+              betType,
+              amount: betAmount,
+              odds,
+              tableId,
+              roundId: effectiveRoundId,
+              backendType: backendMapping.type,
+              backendZone: backendMapping.zone
+            })
+          }
+          
           const response = await apiService.placeBet({
             t_id: tableId,
             r_id: effectiveRoundId,
             type: backendMapping.type,
             zone: backendMapping.zone,
-            amount: Math.abs(amount), // Ensure positive amount
+            amount: betAmount,
             odds: odds,
             cuid: `${betType}-${Date.now()}-${Math.random()}`,
             anyodds: 'N' // Use exact odds, don't accept server odds automatically
           })
+          
+          if (import.meta.env.DEV) {
+            console.log('✅ Bet placed successfully:', {
+              betType,
+              amount: betAmount,
+              responseCode: response.code,
+              wagerNumbers: response.unsettle?.map(b => b.w_no) || []
+            })
+          }
 
-          // Update balance if provided
-          if (response.balance !== undefined) {
-            setAccountBalance(response.balance)
+          // Always fetch balance from API after bet confirmation
+          // This ensures balance is accurate and reflects server-side calculations
+          try {
+            const updatedBalance = await apiService.getBalance()
+            setAccountBalance(updatedBalance)
+            if (import.meta.env.DEV) {
+              console.log('💰 Balance updated from API after bet confirmation:', updatedBalance)
+            }
+          } catch (error) {
+            // Fallback to response.balance if API fetch fails
+            if (response.balance !== undefined) {
+              setAccountBalance(response.balance)
+              if (import.meta.env.DEV) {
+                console.warn('⚠️ Failed to fetch balance from API, using response.balance:', response.balance)
+              }
+            } else {
+              if (import.meta.env.DEV) {
+                console.error('❌ Failed to update balance after bet confirmation')
+              }
+            }
           }
 
           // Handle unsettle/settle response (wager_rid.php format)
@@ -529,25 +617,6 @@ const BettingInterface: React.FC = () => {
     }
   }, [pendingBets, tableId, roundId, isSubmitting, addBet, setAccountBalance, setBettingError, getOddsForBetType])
 
-  /**
-   * Gets display name for bet type
-   */
-  const getBetTypeDisplayName = useCallback((betType: BetType): string => {
-    const names: Record<BetType, string> = {
-      meron: 'Meron',
-      wala: 'Wala',
-      draw: 'Draw',
-      meronRed: 'Meron Red',
-      meronBlack: 'Meron Black',
-      walaRed: 'Wala Red',
-      walaBlack: 'Wala Black',
-      meronOdd: 'Meron Odd',
-      meronEven: 'Meron Even',
-      walaOdd: 'Wala Odd',
-      walaEven: 'Wala Even',
-    }
-    return names[betType] || betType
-  }, [])
 
   /**
    * Clears all pending bets
@@ -637,9 +706,9 @@ const BettingInterface: React.FC = () => {
         <div className="main-bets-top flex-1">
           <button 
             ref={(el) => el && (betButtonRefs.current.meron = el)}
-            className={`bet-button main-bet meron ${activeBetType !== null && activeBetType !== 'meron' ? 'disabled' : ''} ${shakingBetType === 'meron' ? 'shake' : ''}`}
+            className={`bet-button main-bet meron ${(activeBetType !== null && activeBetType !== 'meron') || isMainBetDisabled('meron') ? 'disabled' : ''} ${shakingBetType === 'meron' ? 'shake' : ''}`}
             onClick={() => handleBetClick('meron')}
-            disabled={activeBetType !== null && activeBetType !== 'meron'}
+            disabled={(activeBetType !== null && activeBetType !== 'meron') || isMainBetDisabled('meron')}
           >
             <span className="bet-label-large">Meron</span>
             <span className="bet-odds">{getOddsForBetType('meron')}</span>
@@ -649,9 +718,9 @@ const BettingInterface: React.FC = () => {
           </button>
           <button 
             ref={(el) => el && (betButtonRefs.current.wala = el)}
-            className={`bet-button main-bet wala ${activeBetType !== null && activeBetType !== 'wala' ? 'disabled' : ''} ${shakingBetType === 'wala' ? 'shake' : ''}`}
+            className={`bet-button main-bet wala ${(activeBetType !== null && activeBetType !== 'wala') || isMainBetDisabled('wala') ? 'disabled' : ''} ${shakingBetType === 'wala' ? 'shake' : ''}`}
             onClick={() => handleBetClick('wala')}
-            disabled={activeBetType !== null && activeBetType !== 'wala'}
+            disabled={(activeBetType !== null && activeBetType !== 'wala') || isMainBetDisabled('wala')}
           >
             <span className="bet-label-large">Wala</span>
             <span className="bet-odds">{getOddsForBetType('wala')}</span>
@@ -665,9 +734,9 @@ const BettingInterface: React.FC = () => {
         <div className="main-bets-bottom flex-1">
           <button 
             ref={(el) => el && (betButtonRefs.current.draw = el)}
-            className={`bet-button main-bet draw ${activeBetType !== null && activeBetType !== 'draw' ? 'disabled' : ''}`}
+            className={`bet-button main-bet draw ${(activeBetType !== null && activeBetType !== 'draw') || isMainBetDisabled('draw') ? 'disabled' : ''}`}
             onClick={() => handleBetClick('draw')}
-            disabled={activeBetType !== null && activeBetType !== 'draw'}
+            disabled={(activeBetType !== null && activeBetType !== 'draw') || isMainBetDisabled('draw')}
           >
             <span className="bet-label-large">Draw</span>
             <span className="bet-odds">{getOddsForBetType('draw')}</span>
@@ -773,6 +842,7 @@ const BettingInterface: React.FC = () => {
             pendingBetAmount={totalBetAmount}
             isSubmitting={isSubmitting}
             roundStatus={roundStatus}
+            confirmedBetsCount={bets.length}
           />
         </div>
         

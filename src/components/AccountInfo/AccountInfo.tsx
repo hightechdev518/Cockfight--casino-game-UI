@@ -9,7 +9,7 @@ import './AccountInfo.css'
  * @returns JSX element
  */
 const AccountInfo: React.FC = () => {
-  const { accountBalance, gameId, setAccountBalance } = useGameStore()
+  const { accountBalance, gameId, betLimitMin, betLimitMax, setAccountBalance } = useGameStore()
   const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   /**
@@ -28,6 +28,42 @@ const AccountInfo: React.FC = () => {
    * Formatted account balance
    */
   const formattedBalance = useMemo(() => formatCurrency(accountBalance), [accountBalance, formatCurrency])
+
+  /**
+   * Formats bet range from min/max limits
+   * @returns Formatted bet range string (e.g., "20 - 50K")
+   */
+  const formattedBetRange = useMemo(() => {
+    if (betLimitMin === undefined && betLimitMax === undefined) {
+      return null // No bet limits available
+    }
+    
+    const formatBetAmount = (amount: number): string => {
+      if (amount >= 1000) {
+        const thousands = amount / 1000
+        // If it's a whole number, show without decimals
+        if (thousands % 1 === 0) {
+          return `${thousands}K`
+        }
+        // Otherwise show one decimal place
+        return `${thousands.toFixed(1)}K`
+      }
+      return amount.toString()
+    }
+    
+    const minStr = betLimitMin !== undefined ? formatBetAmount(betLimitMin) : ''
+    const maxStr = betLimitMax !== undefined ? formatBetAmount(betLimitMax) : ''
+    
+    if (minStr && maxStr) {
+      return `${minStr} - ${maxStr}`
+    } else if (minStr) {
+      return `Min: ${minStr}`
+    } else if (maxStr) {
+      return `Max: ${maxStr}`
+    }
+    
+    return null
+  }, [betLimitMin, betLimitMax])
 
   /**
    * Fetches balance from API
@@ -72,12 +108,16 @@ const AccountInfo: React.FC = () => {
      
       </div>
       <div className="game-info-section">
-        <span className="game-id">{gameId || 'CBXE08251119097'}</span>
-        <svg className="coin-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="12" cy="12" r="10"/>
-          <path d="M12 6v12M9 9h6M9 15h6"/>
-        </svg>
-        <span className="bet-range">20 - 50K</span>
+        {gameId && <span className="game-id">{gameId}</span>}
+        {formattedBetRange && (
+          <>
+            <svg className="coin-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 6v12M9 9h6M9 15h6"/>
+            </svg>
+            <span className="bet-range">{formattedBetRange}</span>
+          </>
+        )}
       </div>
     </div>
   )

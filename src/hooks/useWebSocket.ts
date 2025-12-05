@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useGameStore, GameHistory } from '../store/gameStore'
-import { sessionManager } from '../services/apiService'
+import { sessionManager, apiService } from '../services/apiService'
 
 // Production WebSocket URLs - try multiple ports
 const WS_URLS = [
@@ -14,6 +14,68 @@ export const useWebSocket = () => {
   const reconnectAttemptsRef = useRef(0)
   const currentUrlIndexRef = useRef(0)
   const { updateGameStatus, setConnectionStatus, addGameHistory, setAccountBalance } = useGameStore()
+
+  /**
+   * Fetches updated balance from API after game result
+   * This ensures balance reflects wins/losses from settled bets according to server rules
+   * Also fetches wagers for the settled round to verify which bets won/lost
+   */
+  const fetchBalanceAfterResult = async (roundId?: string) => {
+    try {
+      // Always fetch balance from API - server calculates wins/losses based on odds
+      const balance = await apiService.getBalance()
+      setAccountBalance(balance)
+      
+      if (import.meta.env.DEV) {
+        console.log('💰 Balance updated after game result (settlement):', balance)
+      }
+      
+      // Optionally fetch wagers for the settled round to see which bets won/lost
+      // This helps verify that balance changes match the server's calculations
+      if (roundId && import.meta.env.DEV) {
+        try {
+          const wagersResponse = await apiService.getWagersByRound(roundId)
+          if (wagersResponse && wagersResponse.data) {
+            const settledBets = wagersResponse.data.settle || []
+            const unsettledBets = wagersResponse.data.unsettle || []
+            
+            if (settledBets.length > 0) {
+              console.log('📊 Settled bets for round:', {
+                roundId,
+                settledCount: settledBets.length,
+                bets: settledBets.map((bet: any) => ({
+                  w_no: bet.w_no,
+                  w_bet: bet.w_bet,
+                  w_win: bet.w_win,
+                  w_status: bet.w_status,
+                  w_bettype: bet.w_bettype,
+                  w_betzone: bet.w_betzone
+                }))
+              })
+            }
+            
+            if (import.meta.env.DEV) {
+              console.log('📊 Wagers for round:', {
+                roundId,
+                settled: settledBets.length,
+                unsettled: unsettledBets.length
+              })
+            }
+          }
+        } catch (wagerError) {
+          // Silently fail - this is just for verification/logging
+          if (import.meta.env.DEV) {
+            console.debug('Could not fetch wagers for verification:', wagerError)
+          }
+        }
+      }
+    } catch (error) {
+      // Silently fail - balance polling will catch up
+      if (import.meta.env.DEV) {
+        console.debug('Balance fetch after result failed:', error)
+      }
+    }
+  }
 
   const connect = () => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -362,12 +424,20 @@ export const useWebSocket = () => {
                           roundStatus: 1 // Set to betting open
                         })
                         
+                        // Fetch updated balance from API after game result (settlement)
+                        // This ensures balance reflects wins/losses from settled bets according to server rules
+                        if (isSettled) {
+                          const settledRoundId = updateStatus.roundId || tableData.trid?.toString() || tableData.r_id?.toString()
+                          fetchBalanceAfterResult(settledRoundId)
+                        }
+                        
                         if (import.meta.env.DEV) {
                           console.log('✅ Game result from lobby format, starting 20-second betting timer:', {
                             round: roundNumber,
                             result: mappedResult,
                             status: tableData.status,
-                            roundstatus: tableData.roundstatus
+                            roundstatus: tableData.roundstatus,
+                            isSettled
                           })
                         }
                       } else if (import.meta.env.DEV && hasResult) {
@@ -405,6 +475,11 @@ export const useWebSocket = () => {
                   countdown: 20,
                   roundStatus: 1 // Set to betting open (status 1)
                 })
+                
+                // Fetch updated balance from API after game result (settlement)
+                // This ensures balance reflects wins/losses from settled bets according to server rules
+                const settledRoundId = data.payload?.roundId || data.payload?.r_id || data.payload?.trid
+                fetchBalanceAfterResult(settledRoundId?.toString())
                 
                 if (import.meta.env.DEV) {
                   console.log('✅ Game result received, starting 20-second betting timer')
@@ -516,6 +591,13 @@ export const useWebSocket = () => {
                 const hasValidResult = hasResult && (isSettled || (data.payload.drawresult || data.payload.result1))
                 
                 if (roundNumber > 0 && hasValidResult) {
+                  // Fetch updated balance from API after game result (settlement)
+                  // This ensures balance reflects wins/losses from settled bets according to server rules
+                  if (isSettled) {
+                    const settledRoundId = tableroundUpdate.roundId || data.payload?.r_id?.toString() || data.payload?.trid?.toString()
+                    fetchBalanceAfterResult(settledRoundId)
+                  }
+                  
                   const history: GameHistory = {
                     round: roundNumber,
                     result: mappedResult,

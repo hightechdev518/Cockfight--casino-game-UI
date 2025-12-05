@@ -81,7 +81,7 @@ function App() {
         // Try to get player info and lobby info if session exists
         if (sessionId || sessionManager.getSessionId()) {
           try {
-            // Get player info for balance
+            // Get player info for balance, bet limits, and game ID
             const playerInfo = await apiService.getPlayerInfo()
             if (playerInfo && playerInfo.code === 'B100') {
               // Original site structure: balance is at root level, not in data
@@ -90,16 +90,64 @@ function App() {
                 ? parseFloat(playerInfo.balance) 
                 : playerInfo.balance || playerInfo.data?.balance || 0
               
-              initializeGame({
+              // Extract bet limits from API
+              let betLimitMin: number | undefined
+              let betLimitMax: number | undefined
+              
+              if (playerInfo.betlimit) {
+                // Bet limits are at root level
+                betLimitMin = playerInfo.betlimit.min ? parseFloat(playerInfo.betlimit.min) : undefined
+                betLimitMax = playerInfo.betlimit.max ? parseFloat(playerInfo.betlimit.max) : undefined
+              } else if (playerInfo.data?.min !== undefined || playerInfo.data?.max !== undefined) {
+                // Fallback to data structure
+                betLimitMin = playerInfo.data.min
+                betLimitMax = playerInfo.data.max
+              }
+              
+              // Extract gameId from gidlist (table → product mapping)
+              // gidlist format: { "CF01": "CBXE08251119097", "CF02": "CBXE08251119098", ... }
+              let gameIdFromApi: string | undefined
+              if (playerInfo.gidlist && typeof playerInfo.gidlist === 'object') {
+                // Try to get gameId for current table
+                gameIdFromApi = playerInfo.gidlist[tableId] || playerInfo.gidlist[tableId.toUpperCase()] || playerInfo.gidlist[tableId.toLowerCase()]
+                // If not found, get first available gameId
+                if (!gameIdFromApi && Object.keys(playerInfo.gidlist).length > 0) {
+                  gameIdFromApi = Object.values(playerInfo.gidlist)[0] as string
+                }
+              } else if (playerInfo.data?.gidlist && typeof playerInfo.data.gidlist === 'object') {
+                // Fallback to data structure
+                gameIdFromApi = playerInfo.data.gidlist[tableId] || playerInfo.data.gidlist[tableId.toUpperCase()] || playerInfo.data.gidlist[tableId.toLowerCase()]
+                if (!gameIdFromApi && Object.keys(playerInfo.data.gidlist).length > 0) {
+                  gameIdFromApi = Object.values(playerInfo.data.gidlist)[0] as string
+                }
+              }
+              
+              const updateData: Partial<Parameters<typeof initializeGame>[0]> = {
                 accountBalance: balance,
-              })
+              }
+              
+              if (betLimitMin !== undefined) {
+                updateData.betLimitMin = betLimitMin
+              }
+              if (betLimitMax !== undefined) {
+                updateData.betLimitMax = betLimitMax
+              }
+              if (gameIdFromApi) {
+                updateData.gameId = gameIdFromApi
+              }
+              
+              initializeGame(updateData)
               
               if (import.meta.env.DEV) {
                 console.log('✅ PlayerInfo loaded:', {
                   username: playerInfo.username,
                   balance: balance,
                   currency: playerInfo.currency,
-                  betlimit: playerInfo.betlimit
+                  betlimit: playerInfo.betlimit,
+                  betLimitMin,
+                  betLimitMax,
+                  gameId: gameIdFromApi,
+                  gidlist: playerInfo.gidlist
                 })
               }
             }
