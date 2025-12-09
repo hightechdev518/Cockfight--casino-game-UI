@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Set Session Parameters</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .button {
+            background: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        .button:hover {
+            background: #45a049;
+        }
+        .url-display {
+            background: #f9f9f9;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Set Session Parameters</h1>
+        <div class="info">
+            <strong>Current Values:</strong><br>
+            sess_id: <code>ed1c6e34-4410-4784-927c-efd738f3149e</code><br>
+            uniqueid: <code>mwVQsXyvWZ</code><br>
+            lang: <code>en-us</code>
+        </div>
+        
+        <button class="button" onclick="setAndRedirect()">Set Parameters & Redirect to Game</button>
+        
+        <div id="url-display" class="url-display" style="display: none;"></div>
+
+    <script>
+        const SESSION_PARAMS = {
+            sess_id: 'ed1c6e34-4410-4784-927c-efd738f3149e',
+            uniqueid: 'mwVQsXyvWZ',
+            lang: 'en-us'
+        };
+
+        function setAndRedirect() {
+            // Get the base URL (assuming the game is in the parent directory)
+            const baseUrl = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '/');
+            const gameUrl = baseUrl.replace(/\/scripts\/?$/, '/') || window.location.origin + '/';
+            
+            // Build URL with parameters
+            const url = new URL(gameUrl);
+            url.searchParams.set('sess_id', SESSION_PARAMS.sess_id);
+            url.searchParams.set('lang', SESSION_PARAMS.lang);
+            
+            // Store uniqueid in localStorage (it's usually auto-generated per API call)
+            localStorage.setItem('last_uniqueid', SESSION_PARAMS.uniqueid);
+            
+            // Store sess_id in localStorage for session manager
+            localStorage.setItem('mrlive_session_s_uqid', SESSION_PARAMS.sess_id);
+            
+            // Store language preference
+            localStorage.setItem('app_language', SESSION_PARAMS.lang);
+            
+            // Show the URL
+            document.getElementById('url-display').style.display = 'block';
+            document.getElementById('url-display').textContent = 'Redirecting to: ' + url.toString();
+            
+            // Redirect after a short delay
+            setTimeout(() => {
+                window.location.href = url.toString();
+            }, 1000);
+        }
+
+        // Show current URL if parameters are already set
+        window.addEventListener('load', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('sess_id') || urlParams.has('lang')) {
+                const display = document.getElementById('url-display');
+                display.style.display = 'block';
+                display.textContent = 'Current URL: ' + window.location.href;
+            }
+        });
+    </script>
+    </div>
+</body>
+</html>
+

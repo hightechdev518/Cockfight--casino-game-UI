@@ -13,6 +13,8 @@ interface ControlsProps {
   onDouble: () => void
   /** Callback when undo button is clicked */
   onUndo?: () => void
+  /** Callback when rebet button is clicked */
+  onRebet?: () => void
   /** Chip slot to insert between confirm and clear */
   chipSlot?: React.ReactNode
   /** Total pending bets amount (for enable/disable state) */
@@ -21,6 +23,12 @@ interface ControlsProps {
   isSubmitting?: boolean
   /** Round status: 1 = betting open, 2 = fighting/betting closed, 4 = settled */
   roundStatus?: number
+  /** Countdown timer for betting period */
+  countdown?: number
+  /** Number of confirmed bets (bets that have been submitted) */
+  confirmedBetsCount?: number
+  /** Whether betting is currently closed */
+  isBettingClosed?: boolean
 }
 
 /**
@@ -29,38 +37,39 @@ interface ControlsProps {
  * @param props - Component props
  * @returns JSX element
  */
-const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onUndo, chipSlot, pendingBetAmount = 0, isSubmitting = false, roundStatus }) => {
+const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onRebet, chipSlot, pendingBetAmount = 0, isSubmitting = false, confirmedBetsCount = 0, isBettingClosed = false }) => {
   /**
-   * Handles refresh button click - reloads the page
+   * Handles rebet button click - places the same bets as last round
+   * Disabled if there are confirmed bets or if betting is closed
    */
-  const handleRefresh = useCallback(() => {
-    window.location.reload()
-  }, [])
-
-  /**
-   * Handles lobby button click
-   */
-  const handleLobby = useCallback(() => {
-    // Lobby navigation will be implemented when routing is set up
-  }, [])
-
-  /**
-   * Handles undo button click
-   */
-  const handleUndo = useCallback(() => {
-    if (onUndo) {
-      onUndo()
+  const handleRebetClick = useCallback(() => {
+    // Don't rebet if there are confirmed bets
+    if (confirmedBetsCount > 0) {
+      return
     }
-  }, [onUndo])
+    // Don't rebet if betting is closed
+    if (isBettingClosed) {
+      return
+    }
+    // Call the rebet handler from parent
+    if (onRebet) {
+      onRebet()
+    }
+  }, [confirmedBetsCount, isBettingClosed, onRebet])
+  
+  /**
+   * Check if rebet button should be disabled
+   * Disabled when: there are confirmed bets, bets are being submitted, or betting is closed
+   */
+  const isRebetDisabled = confirmedBetsCount > 0 || isSubmitting || isBettingClosed
 
 
   /**
    * Check if betting is currently allowed
-   * Betting is allowed only when roundStatus === 1 (betting period)
-   * When roundStatus === 2 (fighting), betting is disabled
-   * If roundStatus is undefined, allow betting (server will validate)
+   * Betting is allowed only when isBettingClosed is false
+   * The parent component (BettingInterface) determines this based on roundStatus and countdown
    */
-  const isBettingAllowed = roundStatus === undefined || roundStatus === 1
+  const isBettingAllowed = !isBettingClosed
 
   /**
    * Checks if confirm button should be disabled
@@ -76,13 +85,6 @@ const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onUnd
   const isClearDisabled = pendingBetAmount === 0 || isSubmitting || !isBettingAllowed
 
   /**
-   * Checks if undo button should be disabled
-   * Disabled when: no pending bets, submitting, or fighting (roundStatus === 2)
-   * Undo can only work during betting period (roundStatus === 1)
-   */
-  const isUndoDisabled = pendingBetAmount === 0 || isSubmitting || !isBettingAllowed
-
-  /**
    * Checks if double button should be disabled
    * Disabled when: no pending bets, submitting, or fighting (roundStatus === 2)
    * Double can only work during betting period (roundStatus === 1)
@@ -94,27 +96,17 @@ const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onUnd
    */
 
   return (
-    <div className="controls-inline" style={{ flex: '0 0 auto' }}>
+    <div className={`controls-inline ${isBettingClosed ? 'betting-closed' : ''}`} style={{ flex: '0 0 auto' }}>
       {/* Left side buttons */}
       <div className="controls-left-group">
         <button 
-          className={`control-btn-circle undo ${isUndoDisabled ? 'disabled' : ''}`}
-          onClick={handleUndo}
-          disabled={isUndoDisabled}
-          aria-label="Undo last bet"
-          aria-disabled={isUndoDisabled}
+          className={`control-btn-circle refresh ${isRebetDisabled ? 'disabled' : ''}`}
+          onClick={handleRebetClick}
+          disabled={isRebetDisabled}
+          aria-label="Rebet - Place same bets as last round"
+          aria-disabled={isRebetDisabled}
           type="button"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M3 7v6h6"/>
-            <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>
-          </svg>
-        </button>
-        <button 
-          className="control-btn-circle refresh" 
-          onClick={handleRefresh}
-          aria-label="Refresh"
-          type="button"
+          title="Rebet - Place same bets as last round"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
@@ -170,21 +162,6 @@ const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onUnd
         </button>
       </div>
 
-      {/* Right side - Timestamp and Menu */}
-      <div className="controls-right-group">
-        <button 
-          className="control-btn-circle menu menu-pc-hide"
-          onClick={handleLobby}
-          aria-label="Menu"
-          type="button"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <line x1="3" y1="12" x2="21" y2="12"/>
-            <line x1="3" y1="6" x2="21" y2="6"/>
-            <line x1="3" y1="18" x2="21" y2="18"/>
-          </svg>
-        </button>
-      </div>
     </div>
   )
 }

@@ -1,6 +1,5 @@
-import { useCallback, useMemo, useEffect, useRef } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useGameStore } from '../../store/gameStore'
-import { apiService } from '../../services/apiService'
 import './AccountInfo.css'
 
 /**
@@ -9,8 +8,7 @@ import './AccountInfo.css'
  * @returns JSX element
  */
 const AccountInfo: React.FC = () => {
-  const { accountBalance, gameId, setAccountBalance } = useGameStore()
-  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const { accountBalance, tableId, betLimitMin, betLimitMax } = useGameStore()
 
   /**
    * Formats currency value with proper locale formatting
@@ -30,54 +28,63 @@ const AccountInfo: React.FC = () => {
   const formattedBalance = useMemo(() => formatCurrency(accountBalance), [accountBalance, formatCurrency])
 
   /**
-   * Fetches balance from API
+   * Formats bet range from min/max limits
+   * @returns Formatted bet range string (e.g., "20 - 50K")
    */
-  const fetchBalance = useCallback(async () => {
-    try {
-      const balance = await apiService.getBalance()
-      setAccountBalance(balance)
-    } catch (error) {
-      // Silently fail - balance polling shouldn't disrupt the UI
-      // Session might not be initialized yet
-      if (import.meta.env.DEV) {
-        console.debug('Balance fetch failed (expected if not logged in):', error)
-      }
+  const formattedBetRange = useMemo(() => {
+    if (betLimitMin === undefined && betLimitMax === undefined) {
+      return null // No bet limits available
     }
-  }, [setAccountBalance])
-
-  /**
-   * Sets up balance polling
-   */
-  useEffect(() => {
-    // Poll balance every 5 seconds
-    pollingIntervalRef.current = setInterval(() => {
-      fetchBalance()
-    }, 5000)
-
-    // Initial fetch
-    fetchBalance()
-
-    return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current)
-        pollingIntervalRef.current = null
+    
+    const formatBetAmount = (amount: number): string => {
+      if (amount >= 1000) {
+        const thousands = amount / 1000
+        // If it's a whole number, show without decimals
+        if (thousands % 1 === 0) {
+          return `${thousands}K`
+        }
+        // Otherwise show one decimal place
+        return `${thousands.toFixed(1)}K`
       }
+      return amount.toString()
     }
-  }, [fetchBalance])
+    
+    const minStr = betLimitMin !== undefined ? formatBetAmount(betLimitMin) : ''
+    const maxStr = betLimitMax !== undefined ? formatBetAmount(betLimitMax) : ''
+    
+    if (minStr && maxStr) {
+      return `${minStr} - ${maxStr}`
+    } else if (minStr) {
+      return `Min: ${minStr}`
+    } else if (maxStr) {
+      return `Max: ${maxStr}`
+    }
+    
+    return null
+  }, [betLimitMin, betLimitMax])
+
+  // Balance is now only fetched when:
+  // 1. Bet is placed (handled in BettingInterface)
+  // 2. Game result comes (handled in useWebSocket and BettingInterface)
+  // No polling needed - balance updates automatically on these events
 
   return (
     <div className="account-info">
       <div className="account-balance-section">
-        <span className="account-value balance">${formattedBalance}</span>
+        <span className="account-value balance">{formattedBalance}</span>
      
       </div>
       <div className="game-info-section">
-        <span className="game-id">{gameId || 'CBXE08251119097'}</span>
-        <svg className="coin-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="12" cy="12" r="10"/>
-          <path d="M12 6v12M9 9h6M9 15h6"/>
-        </svg>
-        <span className="bet-range">20 - 50K</span>
+        {tableId && <span className="game-id">{tableId}</span>}
+        {formattedBetRange && (
+          <>
+            <svg className="coin-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 6v12M9 9h6M9 15h6"/>
+            </svg>
+            <span className="bet-range">{formattedBetRange}</span>
+          </>
+        )}
       </div>
     </div>
   )

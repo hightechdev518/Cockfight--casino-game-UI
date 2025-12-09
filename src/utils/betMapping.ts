@@ -52,3 +52,40 @@ export const getBetTypeDisplayName = (betType: BetType): string => {
   return names[betType] || betType
 }
 
+/**
+ * Maps backend bet format to frontend BetType
+ * @param w_bettype - Backend bet type code (21001, 21002, 21003)
+ * @param w_betzone - Backend bet zone (M, W, D, MR, MB, WR, WB, MO, ME, WO, WE)
+ * @returns BetType or null if cannot map
+ */
+export const mapBackendToBetType = (w_bettype: string | number, w_betzone: string): BetType | null => {
+  const bettype = typeof w_bettype === 'string' ? parseInt(w_bettype, 10) : w_bettype
+  const zone = (w_betzone || '').toUpperCase()
+  
+  // Map by bet type code and zone
+  if (bettype === 21001) { // Meron
+    if (zone === 'M' || zone === '') return 'meron'
+    if (zone === 'MR' || zone === 'RED') return 'meronRed'
+    if (zone === 'MB' || zone === 'BLACK') return 'meronBlack'
+    if (zone === 'MO' || zone === 'ODD') return 'meronOdd'
+    if (zone === 'ME' || zone === 'EVEN') return 'meronEven'
+    return 'meron' // Default to meron if zone unknown
+  }
+  
+  if (bettype === 21002) { // Wala
+    if (zone === 'W' || zone === '') return 'wala'
+    if (zone === 'WR' || zone === 'RED') return 'walaRed'
+    if (zone === 'WB' || zone === 'BLACK') return 'walaBlack'
+    if (zone === 'WO' || zone === 'ODD') return 'walaOdd'
+    if (zone === 'WE' || zone === 'EVEN') return 'walaEven'
+    return 'wala' // Default to wala if zone unknown
+  }
+  
+  if (bettype === 21003) { // Draw
+    if (zone === 'D' || zone === '' || zone === 'DRAW') return 'draw'
+    return 'draw' // Default to draw
+  }
+  
+  return null
+}
+

@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useEffect, useRef, useState } from 'react'
 import { useGameStore, GameHistory as GameHistoryType } from '../../store/gameStore'
 import { apiService, sessionManager } from '../../services/apiService'
+import BettingSummaryBar from './BettingSummaryBar'
 import './GameHistory.css'
 
 /**
@@ -49,6 +50,7 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
     drawWins: 0
   })
   const [apiRound, setApiRound] = useState<number | null>(null)
+  const [serverRoadmap, setServerRoadmap] = useState<any>(null)
   const roadmapContainerRef = useRef<HTMLDivElement>(null)
 
   /**
@@ -207,6 +209,37 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
             }
           }
 
+          // Extract roadmap data from API (if available)
+          // Backend README: /history.php returns roadmap, goodroad, and allgr
+          // The roadmap is the server-calculated bead road pattern
+          let roadmap = historyData.roadmap || (historyData.data && historyData.data.roadmap)
+          let goodroad = historyData.goodroad || (historyData.data && historyData.data.goodroad)
+          let allgr = historyData.allgr || (historyData.data && historyData.data.allgr)
+          
+          // Store server roadmap if available (may be table-specific)
+          if (roadmap) {
+            // Roadmap might be an object with table IDs as keys, or a direct structure
+            if (typeof roadmap === 'object' && !Array.isArray(roadmap)) {
+              const tableRoadmap = roadmap[tableId] || roadmap[tableId?.toUpperCase()] || roadmap
+              setServerRoadmap(tableRoadmap)
+            } else {
+              setServerRoadmap(roadmap)
+            }
+          } else {
+            setServerRoadmap(null)
+          }
+          
+          if (import.meta.env.DEV) {
+            console.log('📊 Roadmap data from API:', {
+              hasRoadmap: !!roadmap,
+              hasGoodroad: !!goodroad,
+              hasAllgr: !!allgr,
+              roadmapType: typeof roadmap,
+              roadmapKeys: roadmap && typeof roadmap === 'object' ? Object.keys(roadmap) : null,
+              serverRoadmap: serverRoadmap
+            })
+          }
+
           // Extract accu (accumulation) data for statistics
           // Original site structure: accu is at root level, format: { "21000@M": 52, "21000@W": 42, "21000@D": 6 }
           // The format is "21000@{M|W|D}" where 21000 might be a game/product ID
@@ -295,21 +328,30 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
   }, [tableId, parseApiHistory, setGameHistory])
 
   /**
-   * Sets up periodic history fetching
+   * Sets up history fetching
+   * Only fetches on initial load and when game result comes
    */
   useEffect(() => {
     if (!tableId) return
     
-    // Initial fetch
+    // Initial fetch on mount
     fetchHistory()
-    
-    // Poll every 5 seconds for updates
-    const interval = setInterval(() => {
-      fetchHistory()
-    }, 5000)
+  }, [tableId, fetchHistory])
 
+  // Fetch history when game result comes (round settles)
+  useEffect(() => {
+    const handleRoundSettled = () => {
+      if (tableId) {
+        if (import.meta.env.DEV) {
+          console.log('📜 Round settled, fetching updated history')
+        }
+        fetchHistory()
+      }
+    }
+
+    window.addEventListener('round_settled', handleRoundSettled as EventListener)
     return () => {
-      clearInterval(interval)
+      window.removeEventListener('round_settled', handleRoundSettled as EventListener)
     }
   }, [tableId, fetchHistory])
 
@@ -365,14 +407,16 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
 
   /**
    * Generates Bead Road pattern from history
-   * Rules:
+   * Rules (Bead Road / 大路):
    * - Red ring = Meron win
    * - Blue ring = Wala win  
    * - Green ring = Draw
    * - Same consecutive result = stack vertically (same column)
-   * - Different result = new column (horizontal)
+   * - Different result (Meron/Wala) = new column (horizontal)
+   * - Draw result = continue vertically in same column (does NOT create new column)
    * - When column is full (6 rows), continue in next column
-   * - Newest results appear on the left (reverse order)
+   * - Oldest results appear on the right, newest on the left
+   * - History should be processed from oldest to newest (left to right)
    */
   const generateBeadRoad = useMemo((): BeadRoadItem[] => {
     if (history.length === 0) return []
@@ -382,19 +426,26 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
     let currentRow = 0
     let lastResult: 'meron' | 'wala' | 'draw' | null = null
 
-    // Reverse history so newest appears on the left
-    const reversedHistory = [...history].reverse()
-
-    // Process each game result (newest first)
-    reversedHistory.forEach((item) => {
+    // Process history from oldest to newest (left to right in display)
+    // History array is already in chronological order (oldest first)
+    history.forEach((item) => {
       const result = item.result
 
       if (lastResult === null) {
         // First result - start at column 0, row 0
         currentCol = 0
         currentRow = 0
+      } else if (result === 'draw') {
+        // Draw result - continue vertically in same column (do NOT create new column)
+        currentRow++
+        
+        // If column is full (6 rows), move to next column
+        if (currentRow >= GRID_CONFIG.ROWS) {
+          currentCol++
+          currentRow = 0
+        }
       } else if (result === lastResult) {
-        // Same result as previous - stack vertically
+        // Same result as previous (and not draw) - stack vertically (same column)
         currentRow++
         
         // If column is full (6 rows), move to next column
@@ -403,7 +454,9 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
           currentRow = 0
         }
       } else {
-        // Different result - new column
+        // Different result (Meron/Wala) - new column (move right)
+        // Only create new column if it's a different Meron/Wala result
+        // (Draw already handled above)
         currentCol++
         currentRow = 0
       }
@@ -418,7 +471,8 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
       lastResult = result
     })
 
-    return beadRoad
+    // Reverse so newest appears on the left (for display)
+    return beadRoad.reverse()
   }, [history])
 
   /**
@@ -506,10 +560,14 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
               className="summary-toggle-btn"
               title="Switch to Game Summary"
             >
-              <img src="/Button/Lobby.svg" alt="Info" className="info-icon h-[32px]" />
+              <img src="/home.svg" alt="Home" className="info-icon" />
+              <span className="lobby-text">Lobby</span>
             </button>
           </div>
         </div>
+
+        {/* Betting Summary Bar - Only in landscape mode */}
+        <BettingSummaryBar />
       </div>
     )
   }

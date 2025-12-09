@@ -39,9 +39,9 @@
 
 /* Mobile Layout (default) */
 .video-section {
-  flex: 0 0 40vh;
-  min-height: 40vh;
-  max-height: 40vh;
+  flex: 0 0 35vh; /* Reduced from 40vh to make room for controls */
+  min-height: 35vh;
+  max-height: 35vh;
   width: 100%;
   max-width: 100vw;
   overflow: hidden;
@@ -50,9 +50,9 @@
 }
 
 .roadmap-section-mobile {
-  flex: 0 0 280px;
-  height: 280px;
-  max-height: 202px;
+  flex: 0 0 180px; /* Reduced from 280px to make room for controls */
+  height: 180px;
+  max-height: 180px;
   width: 100%;
   max-width: 100vw;
   overflow-x: auto;
@@ -63,13 +63,15 @@
 
 .betting-section-wrapper {
   flex: 1 1 auto;
-  min-height: 326px;
+  min-height: 0; /* Changed from 326px to allow flex shrinking */
   width: 100%;
   max-width: 100vw;
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
 }
 
 .betting-section-mobile {
@@ -228,9 +230,9 @@
   
   .roadmap-section-mobile {
     display: block !important; /* Show roadmap section on desktop, same as mobile */
-    flex: 0 0 280px;
-    height: 280px;
-    max-height: 202px;
+    flex: 0 0 180px; /* Reduced to match mobile */
+    height: 180px;
+    max-height: 180px;
     position: static !important; /* Reset absolute positioning from landscape mode */
     left: auto;
     right: auto;

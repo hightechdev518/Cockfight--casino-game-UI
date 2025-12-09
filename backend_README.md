@@ -1,3 +1,4 @@
+
 # api-h5 API Reference
 
 
@@ -14,7 +15,7 @@
     "data": { "...": "..." }
   }
   ```
-- **Session handling**: Almost every API requires a valid `sess_id` stored in `mrlive.session.s_uqid`. Obtain it via `loginuidpid.php`.
+- **Session handling**: Almhereost every API requires a valid `sess_id` stored in `mrlive.session.s_uqid`. Obtain it via `loginuidpid.php`.
 - **Idempotency**: Parameters named `uniqueid` are cached in Redis to guard against duplicate submissions.
 - **Rate limits**: Betting and validation routes throttle by IP, session, player ID, or explicit Redis keys such as `BETIP:*`, `BETSESS:*`, `BETPID:*`, `RATEVCODE:*`.
 - **Wallet types**:

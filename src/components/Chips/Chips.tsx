@@ -5,7 +5,7 @@ import './Chips.css'
 /**
  * Available chip denominations
  */
-const CHIP_VALUES = [10, 20, 50, 100, 200, 500, 1000, 5000, 10000,50000] as const
+const CHIP_VALUES = [1, 5, 10, 20, 50, 100, 200, 500, 1000, 5000, 10000, 50000] as const
 
 /**
  * Gets chip SVG path from public folder
@@ -13,10 +13,29 @@ const CHIP_VALUES = [10, 20, 50, 100, 200, 500, 1000, 5000, 10000,50000] as cons
 const getChipSVG = (value: number) => `/${value}.svg`
 
 const Chips: React.FC = () => {
-  const { selectedChip, setSelectedChip } = useGameStore()
+  const { selectedChip, setSelectedChip, betLimitMin, betLimitMax } = useGameStore()
   const [expanded, setExpanded] = useState(false)
 
+  /**
+   * Checks if a chip value is within bet limits
+   * @param value - Chip value to check
+   * @returns true if chip is valid, false if outside limits
+   * Note: We allow chips below minimum bet limit because users can place multiple bets
+   * The actual validation happens when placing the bet, not when selecting the chip
+   */
+  const isChipValid = (value: number): boolean => {
+    // Only check maximum limit - allow chips below minimum (user can place multiple bets)
+    if (betLimitMax !== undefined && value > betLimitMax) {
+      return false
+    }
+    return true
+  }
+
   const handleChipSelect = (value: number) => {
+    // Only allow selection if chip is within bet limits
+    if (!isChipValid(value)) {
+      return
+    }
     setSelectedChip(value)
     setExpanded(false) // collapse back to 1 chip
   }
@@ -51,14 +70,18 @@ const Chips: React.FC = () => {
         {expanded &&
           CHIP_VALUES.map((value) => {
             const isSelected = selectedChip === value
+            const isValid = isChipValid(value)
             return (
               <button
                 key={value}
-                className={`chip ${isSelected ? 'selected' : ''}`}
+                className={`chip ${isSelected ? 'selected' : ''} ${!isValid ? 'disabled' : ''}`}
                 onClick={() => handleChipSelect(value)}
-                aria-label={`Select chip ${value}`}
+                aria-label={`Select chip ${value}${!isValid ? ' (outside bet limit)' : ''}`}
                 aria-pressed={isSelected}
+                aria-disabled={!isValid}
+                disabled={!isValid}
                 type="button"
+                title={!isValid ? `Chip value ${value} is outside bet limit range${betLimitMin !== undefined && betLimitMax !== undefined ? ` (${betLimitMin} - ${betLimitMax})` : ''}` : undefined}
               >
                 <div className="chip-inner">
                   <img

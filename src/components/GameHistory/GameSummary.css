@@ -110,6 +110,24 @@
   background: linear-gradient(90deg, transparent, rgba(255, 215, 0, 0.6), transparent);
 }
 
+.game-card.disabled-table {
+  opacity: 0.5;
+  background: linear-gradient(135deg, #1a1a2e 0%, #0f1419 100%);
+  border-color: rgba(107, 114, 128, 0.3);
+  cursor: not-allowed !important;
+}
+
+.game-card.disabled-table:hover {
+  border-color: rgba(107, 114, 128, 0.3);
+  background: linear-gradient(135deg, #1a1a2e 0%, #0f1419 100%);
+  box-shadow: none;
+  transform: none;
+}
+
+.game-card.disabled-table::before {
+  background: linear-gradient(90deg, transparent, rgba(107, 114, 128, 0.2), transparent);
+}
+
 .game-card-header {
   display: flex;
   justify-content: space-between;
@@ -219,4 +237,8 @@
 
 .fighting-text-color{
     color: #f87171;
+}
+
+.maintenance-text-color {
+    color: #9ca3af;
 }

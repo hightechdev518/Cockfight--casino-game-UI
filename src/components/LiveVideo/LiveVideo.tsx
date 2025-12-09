@@ -4,6 +4,8 @@ import 'react-circular-progressbar/dist/styles.css'
 import { useGameStore } from '../../store/gameStore'
 import { apiService, sessionManager } from '../../services/apiService'
 import flvjs from 'flv.js'
+import BettingHistoryModal from '../BettingHistory/BettingHistoryModal'
+import SettingsModal from '../Settings/SettingsModal'
 import './LiveVideo.css'
 
 // Dynamically load HLS.js if available (for Firefox and older browsers)
@@ -66,14 +68,16 @@ const WEBRTC_CONFIG = {
   // WebRTC signaling server base URL
   SIGNALING_BASE_URL: 'https://pulldev.jhf8888.com/tgglive',
   // Stream ID mapping for tables
-  // Pattern: CF01 -> 1012, CF02 -> 1021, CF03 -> 1032, etc.
-  // Note: CF02 uses 1021 (not 1022) based on original site
+  // Pattern: CF01 -> 1012, CF02 -> 1021, CF03 -> 1031, etc.
+  // Based on user specification: CF01=1012, CF02=1021, CF03=1031, CF04=1041, CF05=1051, CF06=1061, CF07=1071
   STREAM_ID_MAP: {
     'CF01': '1012',
-    'CF02': '1021', // Updated based on original site
-    'CF03': '1032',
-    'CF04': '1042',
-    'CF05': '1052',
+    'CF02': '1021',
+    'CF03': '1031',
+    'CF04': '1041',
+    'CF05': '1051',
+    'CF06': '1061',
+    'CF07': '1071',
   } as Record<string, string>,
   // ICE servers for WebRTC
   ICE_SERVERS: [
@@ -84,20 +88,25 @@ const WEBRTC_CONFIG = {
 
 /**
  * Get stream ID for a table
- * Uses pattern: CF01 -> 1012, CF02 -> 1022, etc.
+ * Uses pattern: CF01 -> 1012, CF02 -> 1021, CF03 -> 1031, etc.
  */
 const getStreamIdForTable = (tableId: string): string | null => {
-  // Check predefined map first
+  // Check predefined map first (most reliable)
   if (WEBRTC_CONFIG.STREAM_ID_MAP[tableId]) {
     return WEBRTC_CONFIG.STREAM_ID_MAP[tableId]
   }
   
-  // Try to extract table number and generate stream ID
-  // Pattern: CFxx -> 10X2 where X is table number
-  const match = tableId.match(/^CF(\d+)$/i)
+  // Fallback: Try to extract table number and generate stream ID
+  // Pattern: CF01 -> 1012, CF02 -> 1021, CF03 -> 1031, etc.
+  // Formula: CF0X -> 10X1 (for X >= 2), CF01 -> 1012 (special case)
+  const match = tableId.match(/^CF0?(\d+)$/i)
   if (match) {
     const tableNum = parseInt(match[1], 10)
-    return `10${tableNum}2`
+    if (tableNum === 1) {
+      return '1012' // Special case: CF01 = 1012
+    } else if (tableNum >= 2 && tableNum <= 7) {
+      return `10${tableNum}1` // CF02=1021, CF03=1031, etc.
+    }
   }
   
   return null
@@ -335,14 +344,48 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
   const [liveVideoUrl, setLiveVideoUrl] = useState<string>('')
   const [streamType, setStreamType] = useState<StreamType>('unknown')
   const [iframeUrl, setIframeUrl] = useState<string>('')
-  const { countdown, totalBet, tableId: storeTableId, gameHistory, roundStatus } = useGameStore()
+  const { countdown, tableId: storeTableId, roundStatus, accountBalance } = useGameStore()
+  const [stopBetCountdown, setStopBetCountdown] = useState<number | null>(null)
+  const stopBetTimerRef = useRef<number | null>(null)
+  const prevRoundStatusRef = useRef<number | undefined>(undefined)
   // Use tableId from store, but log if it seems wrong
   const tableId = storeTableId
   const lastFetchTimeRef = useRef(0)
-  const [winMessage, setWinMessage] = useState<{ text: string; type: 'meron' | 'wala' } | null>(null)
+  const [winMessage, setWinMessage] = useState<{ text: string; type: 'meron' | 'wala' | 'draw'; winAmount?: number; status?: 'WIN' | 'LOSE' | 'DRAW' } | null>(null)
   const winMessageTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const lastShownRoundRef = useRef<number | null>(null)
-  const processedHistoryLengthRef = useRef<number>(0)
+  const balanceBeforeSettlementRef = useRef<number | null>(null)
+  const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false)
+  const controlsRowRef = useRef<HTMLDivElement | null>(null)
+  const [isMuted, setIsMuted] = useState<boolean>(true) // Start muted by default
+  const [isBettingHistoryOpen, setIsBettingHistoryOpen] = useState<boolean>(false)
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false)
+  const [isVideoLoading, setIsVideoLoading] = useState<boolean>(true) // Track video loading state
+  const [useVePlayer, setUseVePlayer] = useState<boolean>(false) // Track if using VePlayer
+  const vePlayerRef = useRef<any>(null) // VePlayer instance
+  const vePlayerContainerRef = useRef<HTMLDivElement>(null) // Container for VePlayer
+  const roomPlayersRef = useRef<Record<string, any>>({}) // Store VePlayer instances per table
+
+  /**
+   * Closes menu when clicking outside
+   */
+  useEffect(() => {
+    if (!isMenuOpen) return
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (
+        controlsRowRef.current &&
+        !controlsRowRef.current.contains(target)
+      ) {
+        setIsMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isMenuOpen])
 
   /**
    * Cleanup WebRTC peer connection
@@ -416,7 +459,7 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
       pc.ontrack = (event) => {
         if (event.streams && event.streams[0]) {
           video.srcObject = event.streams[0]
-          video.muted = true
+          video.muted = isMuted
           video.play().catch(() => {
             // Autoplay may be blocked - user can click to play
           })
@@ -509,10 +552,198 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
       cleanupWebRTC()
       // Note: fetchVideoUrl will be called again by the polling mechanism
     }
-  }, [cleanupWebRTC, tableId])
+  }, [cleanupWebRTC, tableId, isMuted])
+
+  /**
+   * Loads VePlayer library dynamically
+   * 
+   * NOTE: VePlayer must be included as a script tag in index.html
+   * Example: <script src="path/to/veplayer.min.js"></script>
+   * Or load from CDN: <script src="https://cdn.example.com/veplayer.min.js"></script>
+   * 
+   * VePlayer should be available globally as window.VePlayer
+   */
+  const loadVePlayer = useCallback(async (): Promise<any> => {
+    if (typeof window === 'undefined') {
+      return null
+    }
+
+    // Check if VePlayer is already loaded
+    if ((window as any).VePlayer && typeof (window as any).VePlayer.createLivePlayer === 'function') {
+      return (window as any).VePlayer
+    }
+
+    // Try to load from CDN or script tag
+    try {
+      return await new Promise((resolve, reject) => {
+        // Check again in case it was loaded between checks
+        if ((window as any).VePlayer && typeof (window as any).VePlayer.createLivePlayer === 'function') {
+          resolve((window as any).VePlayer)
+          return
+        }
+
+        // Try to find existing script tag
+        const existingScript = document.querySelector('script[src*="veplayer" i]')
+        if (existingScript) {
+          // Wait for it to load
+          existingScript.addEventListener('load', () => {
+            if ((window as any).VePlayer) {
+              resolve((window as any).VePlayer)
+            } else {
+              reject(new Error('VePlayer failed to load'))
+            }
+          })
+          return
+        }
+
+        // VePlayer not found - user needs to include script tag in index.html
+        if (import.meta.env.DEV) {
+          console.warn('📺 VePlayer not found. Please include VePlayer script in index.html.')
+          console.warn('📺 Example: <script src="path/to/veplayer.min.js"></script>')
+        }
+        reject(new Error('VePlayer not available - include script tag in index.html'))
+      })
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.debug('VePlayer not available:', error)
+      }
+      return null
+    }
+  }, [])
+
+  /**
+   * Initializes VePlayer for the current table
+   */
+  const initializeVePlayer = useCallback(async (tableId: string, playUrl: string) => {
+    if (!tableId || !playUrl) return
+
+    try {
+      const VePlayer = await loadVePlayer()
+      if (!VePlayer) {
+        if (import.meta.env.DEV) {
+          console.warn('📺 VePlayer not available, falling back to standard video player')
+        }
+        setUseVePlayer(false)
+        return
+      }
+
+      // Clean up existing player for this table
+      if (roomPlayersRef.current[tableId]) {
+        try {
+          roomPlayersRef.current[tableId].destroy()
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+        delete roomPlayersRef.current[tableId]
+      }
+
+      // Get or create container
+      const containerId = `veplayer-container-${tableId}`
+      let container = document.getElementById(containerId)
+      
+      if (!container && vePlayerContainerRef.current) {
+        // Use the ref container
+        container = vePlayerContainerRef.current
+        container.id = containerId
+      }
+
+      if (!container) {
+        if (import.meta.env.DEV) {
+          console.error('📺 VePlayer container not found')
+        }
+        return
+      }
+
+      // Clear container
+      container.innerHTML = ''
+
+      // Create VePlayer instance
+      const player = VePlayer.createLivePlayer({
+        id: containerId,
+        poster: './assets1/img/maintainarena.png', // Use arena image as poster
+        url: playUrl,
+        infoPanel: {
+          visible: false,
+        },
+        videoFillMode: 'fillHeight',
+        closeVideoClick: true,
+        codec: 'h264',
+        autoplay: { muted: true },
+        ignores: ['autoplayPlugin', 'controls'],
+        playsinline: true,
+        fluid: true,
+        logger: {
+          appId: '861950',
+        },
+        mobile: {
+          gradient: 'none',
+        }
+      })
+
+      // Store player instance
+      roomPlayersRef.current[tableId] = player
+      vePlayerRef.current = player
+      setUseVePlayer(true)
+      setIsVideoLoading(true) // Show loading image initially
+      setVideoError(false)
+
+      // Handle player ready event
+      if (player.on) {
+        player.on('ready', () => {
+          setIsVideoLoading(false) // Hide loading image when video is ready
+          if (import.meta.env.DEV) {
+            console.log('📺 VePlayer ready for table:', tableId)
+          }
+        })
+
+        player.on('play', () => {
+          setIsVideoLoading(false) // Hide loading image when video starts playing
+        })
+
+        // Handle error event with auto-retry
+        player.on('error', (e: any) => {
+          console.warn(`VePlayer error for ${tableId}:`, e)
+          
+          // Auto retry after 2000ms
+          if (roomPlayersRef.current[tableId]) {
+            try {
+              roomPlayersRef.current[tableId].destroy()
+            } catch (destroyError) {
+              // Ignore destroy errors
+            }
+            delete roomPlayersRef.current[tableId]
+          }
+
+          // Set error state temporarily
+          setVideoError(true)
+          setIsVideoLoading(true) // Show loading image during retry
+
+          setTimeout(() => {
+            // Retry initialization
+            initializeVePlayer(tableId, playUrl).catch((retryError) => {
+              if (import.meta.env.DEV) {
+                console.error('📺 VePlayer retry failed:', retryError)
+              }
+              setUseVePlayer(false) // Fall back to standard player
+            })
+          }, 2000)
+        })
+      }
+
+      if (import.meta.env.DEV) {
+        console.log('📺 VePlayer initialized for table:', tableId, 'URL:', playUrl)
+      }
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('📺 Failed to initialize VePlayer:', error)
+      }
+      setUseVePlayer(false)
+    }
+  }, [loadVePlayer])
 
   /**
    * Fetches live video URL from API and initializes WebRTC stream
+   * Called when tableId changes or video_url_refresh event is dispatched
    */
   const fetchVideoUrl = useCallback(async () => {
     // Get fresh tableId from store to avoid stale closures
@@ -577,6 +808,23 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
                 }
                 setLiveVideoUrl(selectedUrl.url)
                 setStreamType(selectedUrl.type)
+                setIsVideoLoading(true) // Show loading image when URL changes
+                
+                // Try VePlayer first if available (for HLS, FLV, MP4 streams)
+                if (tableId && (selectedUrl.type === 'hls' || selectedUrl.type === 'flv' || selectedUrl.type === 'mp4')) {
+                  try {
+                    await initializeVePlayer(tableId, selectedUrl.url)
+                    // Check if VePlayer was successfully initialized
+                    if (roomPlayersRef.current[tableId]) {
+                      setVideoError(false)
+                      return // VePlayer is handling the stream
+                    }
+                  } catch (error) {
+                    if (import.meta.env.DEV) {
+                      console.warn('📺 VePlayer initialization failed, falling back to standard player:', error)
+                    }
+                  }
+                }
                 
                 if (selectedUrl.type === 'iframe') {
                   setIframeUrl(selectedUrl.url)
@@ -672,7 +920,7 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
         setVideoError(true)
       }
     }
-  }, [tableId, connectWebRTC])
+  }, [tableId, connectWebRTC, initializeVePlayer])
 
   /**
    * Sets up periodic video URL fetching
@@ -714,9 +962,23 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
     const interval = setInterval(() => {
       fetchVideoUrl()
     }, 30000)
+    
+    // Listen for video_url_refresh event (triggered when table switches)
+    const handleVideoRefresh = (event: CustomEvent) => {
+      const newTableId = event.detail?.tableId
+      if (newTableId && newTableId === tableId) {
+        if (import.meta.env.DEV) {
+          console.log('📺 Video refresh event received for table:', newTableId)
+        }
+        fetchVideoUrl()
+      }
+    }
+    
+    window.addEventListener('video_url_refresh', handleVideoRefresh as EventListener)
 
     return () => {
       clearInterval(interval)
+      window.removeEventListener('video_url_refresh', handleVideoRefresh as EventListener)
     }
   }, [fetchVideoUrl, tableId])
 
@@ -794,14 +1056,15 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
    */
   const handleVideoLoaded = useCallback(() => {
     setVideoError(false)
+    setIsVideoLoading(false) // Video has loaded, hide loading image
     const video = videoRef.current
     if (video) {
-      video.muted = true
+      video.muted = isMuted
       video.play().catch(() => {
         // Autoplay might be blocked - user can click to play
       })
     }
-  }, [])
+  }, [isMuted])
 
   /**
    * Handles video play events
@@ -936,12 +1199,17 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
               hasVideo: true
             }, {
               enableWorker: false,
-              enableStashBuffer: false,
+              enableStashBuffer: true, // Enable stash buffer to reduce frame drops
               stashInitialSize: 128,
               autoCleanupSourceBuffer: true,
               autoCleanupMaxBackwardDuration: 3,
               autoCleanupMinBackwardDuration: 2,
-              statisticsInfoReportInterval: 1000
+              statisticsInfoReportInterval: 1000,
+              // Additional buffer settings to reduce audio frame drops
+              lazyLoad: false,
+              lazyLoadMaxDuration: 3 * 60,
+              lazyLoadRecoverDuration: 30,
+              deferLoadAfterSourceOpen: false
             })
             
             flvPlayer.attachMediaElement(video)
@@ -1059,17 +1327,52 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
       }
       cleanupFLV()
     }
-  }, [videoUrl, streamType, iframeUrl, autoPlay, cleanupFLV])
+  }, [videoUrl, streamType, iframeUrl, autoPlay, cleanupFLV, isMuted])
 
   /**
-   * Cleanup WebRTC and FLV on unmount
+   * Cleanup WebRTC, FLV, and VePlayer on unmount
    */
   useEffect(() => {
     return () => {
       cleanupWebRTC()
       cleanupFLV()
+      
+      // Cleanup VePlayer instances
+      Object.values(roomPlayersRef.current).forEach((player) => {
+        try {
+          if (player && typeof player.destroy === 'function') {
+            player.destroy()
+          }
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+      })
+      roomPlayersRef.current = {}
+      vePlayerRef.current = null
     }
   }, [cleanupWebRTC, cleanupFLV])
+
+  /**
+   * Cleanup VePlayer and reset loading state when table changes
+   */
+  useEffect(() => {
+    // Reset loading state when table changes
+    setIsVideoLoading(true)
+    setUseVePlayer(false)
+    
+    return () => {
+      // Cleanup VePlayer for previous table
+      const currentTableId = useGameStore.getState().tableId
+      if (currentTableId && roomPlayersRef.current[currentTableId]) {
+        try {
+          roomPlayersRef.current[currentTableId].destroy()
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+        delete roomPlayersRef.current[currentTableId]
+      }
+    }
+  }, [tableId])
 
   /**
    * Sets up video event listeners and autoplay
@@ -1104,6 +1407,18 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
       video.play().catch(() => {})
     }
   }, [isPlaying])
+
+  /**
+   * Toggles video mute/unmute state
+   */
+  const toggleMute = useCallback(() => {
+    const video = videoRef.current
+    if (!video) return
+
+    const newMutedState = !isMuted
+    video.muted = newMutedState
+    setIsMuted(newMutedState)
+  }, [isMuted])
 
   /**
    * Handles fullscreen toggle
@@ -1212,139 +1527,222 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
   /**
    * Clear countdown when fighting starts (roundStatus === 2)
    * This ensures timer is hidden immediately when fighting begins
+   * Also start the stopBet countdown (3->2->1->0) when betting stops
    */
   useEffect(() => {
-    if (roundStatus === 2 && countdown !== undefined) {
-      const { updateGameStatus } = useGameStore.getState()
-      updateGameStatus({ countdown: undefined })
+    const previousRoundStatus = prevRoundStatusRef.current
+    
+    // Detect when betting stops (roundStatus changes from 1 to 2)
+    if (roundStatus === 2 && previousRoundStatus === 1) {
+      // Clear betting countdown
+      if (countdown !== undefined) {
+        const { updateGameStatus } = useGameStore.getState()
+        updateGameStatus({ countdown: undefined })
+        if (import.meta.env.DEV) {
+          console.log('⛔ Fighting started (roundStatus === 2), clearing countdown timer from LiveVideo')
+        }
+      }
+      
+      // Start stopBet countdown (3->2->1->0)
+      setStopBetCountdown(3)
       if (import.meta.env.DEV) {
-        console.log('⛔ Fighting started (roundStatus === 2), clearing countdown timer from LiveVideo')
+        console.log('⏱️ Betting stopped, starting stopBet countdown: 3')
       }
     }
-  }, [roundStatus, countdown])
+    
+    // Capture balance before settlement (when roundStatus becomes 4)
+    if (roundStatus === 4 && previousRoundStatus !== 4) {
+      balanceBeforeSettlementRef.current = accountBalance
+      if (import.meta.env.DEV) {
+        console.log('💰 Captured balance before settlement:', accountBalance, 'roundStatus:', roundStatus)
+      }
+    }
+    
+    // Update previous roundStatus
+    prevRoundStatusRef.current = roundStatus
+  }, [roundStatus, countdown, accountBalance])
+
+  /**
+   * Handle stopBet countdown (3->2->1->0)
+   * Runs when betting stops (roundStatus === 2)
+   */
+  useEffect(() => {
+    if (stopBetCountdown === null || stopBetCountdown < 0) {
+      // Clear any existing timer
+      if (stopBetTimerRef.current) {
+        clearInterval(stopBetTimerRef.current)
+        stopBetTimerRef.current = null
+      }
+      return
+    }
+
+    // If countdown reaches 0, clear it
+    if (stopBetCountdown === 0) {
+      if (import.meta.env.DEV) {
+        console.log('⏱️ StopBet countdown finished')
+      }
+      // Clear after a brief moment to show "0"
+      const timeout = setTimeout(() => {
+        setStopBetCountdown(null)
+      }, 500)
+      return () => clearTimeout(timeout)
+    }
+
+    // Start countdown timer
+    stopBetTimerRef.current = window.setInterval(() => {
+      setStopBetCountdown((prev) => {
+        if (prev === null || prev <= 0) {
+          return null
+        }
+        const next = prev - 1
+        if (import.meta.env.DEV && next >= 0) {
+          console.log('⏱️ StopBet countdown:', next)
+        }
+        return next
+      })
+    }, 1000) as unknown as number
+
+    return () => {
+      if (stopBetTimerRef.current) {
+        clearInterval(stopBetTimerRef.current)
+        stopBetTimerRef.current = null
+      }
+    }
+  }, [stopBetCountdown])
 
   /**
    * Builds styles for the circular progress bar
+   * Text color is set via CSS to match the path color (green/yellow/red)
    */
   const progressStyles = useMemo(() => buildStyles({
-    // pathColor: '#fff',
-    textColor: '#fff',
+    // pathColor: set via CSS based on countdownState
+    // textColor: set via CSS to match path color
     trailColor: COUNTDOWN_CONFIG.TRAIL_COLOR,
     textSize: COUNTDOWN_CONFIG.TEXT_SIZE,
     pathTransition: 'stroke-dashoffset 0.5s linear',
   }), [])
 
   /**
-   * Formats the current date and time
+   * Listen for NEW game results from server (via WebSocket)
+   * Only shows win message when server sends a new result, NOT on page refresh
+   * This ensures win message only displays for real-time results from server
    */
-  const formattedTime = useMemo(() => {
-    return new Date().toLocaleString('en-US', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      timeZone: 'Asia/Shanghai'
-    })
-  }, [])
+  // Track shown rounds to prevent duplicate popups
+  const shownRoundsRef = useRef<Record<string, boolean>>({})
 
-  /**
-   * Gets the latest game result and shows win message if meron or wala wins
-   * Only shows message for new results (not already displayed)
-   * Also starts the betting countdown timer (20 seconds) after game result
-   */
   useEffect(() => {
-    if (gameHistory.length === 0) {
-      // Reset processed length when history is cleared
-      processedHistoryLengthRef.current = 0
-      return
-    }
-
-    const latestResult = gameHistory[gameHistory.length - 1]
-    const currentHistoryLength = gameHistory.length
-    
-    // Check if this is a truly new result by comparing history length
-    // This works better than round number because it detects when new results are added
-    const isNewResult = currentHistoryLength > processedHistoryLengthRef.current
-    
-    if (isNewResult && latestResult.round > 0) {
-      // Mark this history length as processed
-      const previousLength = processedHistoryLengthRef.current
-      processedHistoryLengthRef.current = currentHistoryLength
-      const previousRound = lastShownRoundRef.current
-      lastShownRoundRef.current = latestResult.round
-      
-      // Show win message only for meron or wala wins (not draw)
-      // Show immediately when NEW result is received (not on first page load)
-      // Only show if this is a real-time update (previousLength > 0 means we've processed at least one result before)
-      if ((latestResult.result === 'meron' || latestResult.result === 'wala') && previousLength > 0) {
-        // Clear any existing timeout
-        if (winMessageTimeoutRef.current) {
-          clearTimeout(winMessageTimeoutRef.current)
-        }
-
-        // Set win message
-        setWinMessage({
-          text: latestResult.result === 'meron' ? 'Meron Win' : 'Wala Win',
-          type: latestResult.result
-        })
-
-        if (import.meta.env.DEV) {
-          console.log('🎉 Showing win message for new result:', {
-            round: latestResult.round,
-            result: latestResult.result,
-            previousRound: previousRound,
-            previousLength: previousLength,
-            currentLength: currentHistoryLength
-          })
-        }
-
-        // Hide message after 5 seconds
-        winMessageTimeoutRef.current = setTimeout(() => {
-          setWinMessage(null)
-          winMessageTimeoutRef.current = null
-        }, 5000)
-      } else if (import.meta.env.DEV && previousLength === 0) {
-        // First load - don't show message, just mark as processed
-        console.log('ℹ️ First page load - not showing win message. Waiting for new game result:', {
-          round: latestResult.round,
-          result: latestResult.result
-        })
+    const handleSettlement = (event: CustomEvent) => {
+      if (import.meta.env.DEV) {
+        console.log('📨 LiveVideo: Received round_settled event:', event.detail)
       }
       
-      // Start timer for ANY new result (meron, wala, or draw)
-      // IMPORTANT: Only start timer if this is a NEW result (not on page load/refresh)
-      // We check if previousLength > 0 (not first load) - if so, start timer
-      // Timer should only start when a NEW result comes in AFTER page load
-      if (previousLength > 0) {
-        // Start betting countdown timer (20 seconds) after game result
-        const { updateGameStatus, countdown: currentCountdown } = useGameStore.getState()
-        
-        // Always start/reset timer when new result is received (even if timer is running)
-        // This ensures timer starts fresh for each new round result
-        updateGameStatus({
-          countdown: 20,
-          roundStatus: 1 // Set to betting open
-        })
-        
+      const { roundId, result: r_drawresult, win } = event.detail
+      
+      if (!r_drawresult || roundId === undefined) {
         if (import.meta.env.DEV) {
-          console.log('✅ Game result received in LiveVideo, starting 20-second betting timer:', {
-            round: latestResult.round,
-            result: latestResult.result,
-            previousCountdown: currentCountdown,
-            newCountdown: 20
-          })
+          console.warn('⚠️ LiveVideo: Settlement event missing required fields:', event.detail)
         }
+        return
       }
+
+      // Prevent duplicate popups for the same round
+      if (shownRoundsRef.current[roundId]) {
+        if (import.meta.env.DEV) {
+          console.log('ℹ️ LiveVideo: Settlement already shown for round:', roundId)
+        }
+        return
+      }
+      shownRoundsRef.current[roundId] = true
+
+      // Clear any existing timeout
+      if (winMessageTimeoutRef.current) {
+        clearTimeout(winMessageTimeoutRef.current)
+      }
+
+      // Map r_drawresult ("M", "W", "D") to our format ("meron", "wala", "draw")
+      let resultType: 'meron' | 'wala' | 'draw' = 'meron'
+      let resultText = ''
+      
+      const drawresultUpper = String(r_drawresult).toUpperCase().trim()
+      if (drawresultUpper === 'M' || drawresultUpper === 'MERON') {
+        resultType = 'meron'
+        resultText = 'Meron Win'
+      } else if (drawresultUpper === 'W' || drawresultUpper === 'WALA') {
+        resultType = 'wala'
+        resultText = 'Wala Win'
+      } else if (drawresultUpper === 'D' || drawresultUpper === 'DRAW') {
+        resultType = 'draw'
+        resultText = 'Draw'
+      } else {
+        if (import.meta.env.DEV) {
+          console.warn('⚠️ LiveVideo: Unknown result type:', r_drawresult)
+        }
+        return
+      }
+
+      // Parse win amount (can be string or number)
+      const winAmount = typeof win === 'string' ? parseFloat(win) : (typeof win === 'number' ? win : 0)
+
+      // Determine status based on win amount
+      let status: 'WIN' | 'LOSE' | 'DRAW' = 'LOSE'
+      let displayAmount = 0
+
+      if (winAmount > 0) {
+        // WIN - User won money
+        status = 'WIN'
+        displayAmount = winAmount
+      } else if (winAmount === 0 && resultType === 'draw') {
+        // DRAW - Bet returned (usually when Draw wins)
+        status = 'DRAW'
+        displayAmount = 0
+      } else {
+        // LOSE - User lost bet
+        status = 'LOSE'
+        displayAmount = -Math.abs(winAmount) // Negative for loss
+      }
+
+      // Set win message immediately
+      setWinMessage({
+        text: resultText,
+        type: resultType,
+        winAmount: displayAmount,
+        status: status
+      })
+
+      if (import.meta.env.DEV) {
+        console.log('🎉 LiveVideo: Showing settlement message:', {
+          roundId,
+          result: r_drawresult,
+          resultType,
+          winAmount,
+          status,
+          displayAmount
+        })
+      }
+
+      // Hide message after 5 seconds
+      winMessageTimeoutRef.current = setTimeout(() => {
+        setWinMessage(null)
+        winMessageTimeoutRef.current = null
+      }, 5000)
     }
+
+    // Listen for settlement events from WebSocket
+    if (import.meta.env.DEV) {
+      console.log('👂 LiveVideo: Setting up event listener for round_settled')
+    }
+    window.addEventListener('round_settled', handleSettlement as EventListener)
 
     return () => {
+      if (import.meta.env.DEV) {
+        console.log('🧹 LiveVideo: Cleaning up event listener for round_settled')
+      }
+      window.removeEventListener('round_settled', handleSettlement as EventListener)
       if (winMessageTimeoutRef.current) {
         clearTimeout(winMessageTimeoutRef.current)
       }
     }
-  }, [gameHistory])
+  }, [])
 
   return (
     <div className="live-video-container">
@@ -1369,63 +1767,85 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
       {/* Top Right: Controls */}
       <div className="video-overlay-top-right">
         <div className="video-controls-overlay">
-          <div className="video-controls-row">
-            <button className="control-icon" aria-label="Chat" title="Chat">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                <circle cx="9" cy="10" r="1" fill="currentColor"/>
-                <circle cx="15" cy="10" r="1" fill="currentColor"/>
-                <circle cx="12" cy="10" r="1" fill="currentColor"/>
-              </svg>
-            </button>
-            <button className="control-icon" aria-label="Video" title="Video Settings">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="2" y="5" width="20" height="14" rx="2" ry="2"/>
-                <path d="M2 8h20M2 12h20M2 16h20"/>
-              </svg>
-            </button>
-            <button className="control-icon" aria-label="Sound" title="Sound">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
-              </svg>
-            </button>
-            <button className="control-icon" aria-label="Settings" title="Settings">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="3"/>
-                <path d="M12 1v6m0 6v6m9-9h-6m-6 0H3m15.364 6.364l-4.243-4.243m-4.242 0L5.636 18.364m12.728-12.728l-4.243 4.243m-4.242 0L5.636 5.636"/>
-              </svg>
-            </button>
-            <button className="control-icon" aria-label="Documents" title="Documents">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>
-              </svg>
-            </button>
-            <button className="control-icon" aria-label="Help" title="Help">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-                <line x1="12" y1="17" x2="12.01" y2="17"/>
-              </svg>
-            </button>
+          <div ref={controlsRowRef} className="video-controls-row">
+            {/* Control Buttons - Show when menu is open */}
+            {isMenuOpen && (
+              <>
+                <button 
+                  className="control-icon" 
+                  aria-label={isMuted ? 'Unmute' : 'Mute'} 
+                  title={isMuted ? 'Unmute' : 'Mute'}
+                  onClick={toggleMute}
+                >
+                  {isMuted ? (
+                    // Muted icon (speaker with X)
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                      <line x1="23" y1="9" x2="17" y2="15"/>
+                      <line x1="17" y1="9" x2="23" y2="15"/>
+                    </svg>
+                  ) : (
+                    // Unmuted icon (speaker with sound waves)
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                    </svg>
+                  )}
+                </button>
+                <button 
+                  className="control-icon" 
+                  aria-label="Settings" 
+                  title="Settings"
+                  onClick={() => setIsSettingsOpen(true)}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M12 1v6m0 6v6m9-9h-6m-6 0H3m15.364 6.364l-4.243-4.243m-4.242 0L5.636 18.364m12.728-12.728l-4.243 4.243m-4.242 0L5.636 5.636"/>
+                  </svg>
+                </button>
+                <button 
+                  className="control-icon" 
+                  aria-label="Documents" 
+                  title="Betting History"
+                  onClick={() => setIsBettingHistoryOpen(true)}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>
+                  </svg>
+                </button>
+                <button 
+                  className="control-icon" 
+                  aria-label="Fullscreen" 
+                  title="Fullscreen" 
+                  onClick={handleFullscreen}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+                  </svg>
+                </button>
+              </>
+            )}
+            
+            {/* Menu Button - Always visible */}
             <button 
-              className="control-icon" 
-              aria-label="Fullscreen" 
-              title="Fullscreen" 
-              onClick={handleFullscreen}
+              className="control-icon menu-button" 
+              aria-label="Menu" 
+              title="Menu"
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+                <line x1="3" y1="12" x2="21" y2="12"/>
+                <line x1="3" y1="6" x2="21" y2="6"/>
+                <line x1="3" y1="18" x2="21" y2="18"/>
               </svg>
             </button>
           </div>
-          <div className="video-time">{formattedTime} (UTC+8)</div>
         </div>
       </div>
 
 
-      {/* Countdown Badge */}
+      {/* Countdown Badge - Betting Period */}
       {isCountdownVisible && (
         <div className={`countdown-badge ${countdownState}`} role="timer" aria-live="polite" aria-label={`Countdown: ${countdown}`}>
           <CircularProgressbar
@@ -1437,23 +1857,68 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
         </div>
       )}
 
-      {/* Total Bet Display */}
-      <div className="total-bet-display">
-        <span>Total bet <span className="total-bet-display-value">${totalBet.toFixed(2)}</span></span>
-      </div>
+      {/* StopBet Countdown Badge - Shows 3->2->1->0 when betting stops */}
+      {stopBetCountdown !== null && stopBetCountdown >= 0 && (
+        <div className="countdown-badge stopbet-countdown red" role="timer" aria-live="polite" aria-label={`StopBet Countdown: ${stopBetCountdown}`}>
+          <CircularProgressbar
+            value={((4 - stopBetCountdown) / 4) * 100}
+            text={`${stopBetCountdown}`}
+            strokeWidth={COUNTDOWN_CONFIG.STROKE_WIDTH}
+            styles={progressStyles}
+          />
+        </div>
+      )}
+
 
       {/* Win Message Overlay */}
       {winMessage && (
         <div className={`win-message-overlay ${winMessage.type}`}>
           <div className="win-message-content">
             <div className="win-message-text">{winMessage.text}</div>
+            {winMessage.status && (
+              <div className={`win-message-amount ${winMessage.status.toLowerCase()}`}>
+                {winMessage.status === 'WIN' && winMessage.winAmount !== undefined && winMessage.winAmount > 0 && (
+                  <>You Won! +{winMessage.winAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</>
+                )}
+                {winMessage.status === 'LOSE' && winMessage.winAmount !== undefined && winMessage.winAmount < 0 && (
+                  <>You Lost -{Math.abs(winMessage.winAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</>
+                )}
+                {winMessage.status === 'DRAW' && (
+                  <>Draw - Bet Returned</>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
       
       <div className="video-wrapper">
+        {/* Loading Image - Show while video is loading */}
+        {isVideoLoading && (
+          <div className="video-loading-poster">
+            {/* Optional loading spinner overlay */}
+            <div className="loading-spinner" />
+          </div>
+        )}
+
+        {/* VePlayer Container */}
+        {useVePlayer && (
+          <div 
+            ref={vePlayerContainerRef}
+            id={`veplayer-container-${tableId}`}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              zIndex: 1
+            }}
+          />
+        )}
+
         {/* Iframe embed for external players */}
-        {streamType === 'iframe' && iframeUrl && (
+        {!useVePlayer && streamType === 'iframe' && iframeUrl && (
           <iframe
             className="live-video-iframe"
             src={iframeUrl}
@@ -1472,19 +1937,23 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
         )}
         
         {/* HTML5 Video element for direct playback */}
-        {streamType !== 'iframe' && (
+        {!useVePlayer && streamType !== 'iframe' && (
           <video
             ref={videoRef}
             className="live-video"
             playsInline
-            muted={true}
+            muted={isMuted}
             autoPlay={autoPlay}
             controls={false}
             preload="auto"
             loop={false}
             onError={handleVideoError}
             onLoadedData={handleVideoLoaded}
-            style={{ display: (videoError && !liveVideoUrl && !iframeUrl) ? 'none' : 'block' }}
+            style={{ 
+              display: (videoError && !liveVideoUrl && !iframeUrl) ? 'none' : 'block',
+              opacity: isVideoLoading ? 0 : 1,
+              transition: 'opacity 0.3s ease-in-out'
+            }}
           >
             {videoUrl && streamType !== 'webrtc' && (
               <source src={videoUrl} type={videoUrl.includes('.m3u8') ? 'application/x-mpegURL' : 'video/mp4'} />
@@ -1525,6 +1994,18 @@ const LiveVideo: React.FC<LiveVideoProps> = ({
           </div>
         )}
       </div>
+
+      {/* Betting History Modal */}
+      <BettingHistoryModal 
+        isOpen={isBettingHistoryOpen}
+        onClose={() => setIsBettingHistoryOpen(false)}
+      />
+
+      {/* Settings Modal */}
+      <SettingsModal 
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
     </div>
   )
 }

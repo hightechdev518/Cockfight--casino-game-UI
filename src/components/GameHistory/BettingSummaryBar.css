@@ -1,0 +1,99 @@
+.betting-summary-bar {
+  display: none; /* Hidden by default (portrait mode) */
+  width: 100%;
+  background: linear-gradient(135deg, #1a1a2e 0%, #0f1419 100%);
+  border-top: 1px solid rgba(209, 154, 102, 0.3);
+  padding: 8px 12px;
+  flex-shrink: 0;
+}
+
+/* Show in landscape mode only */
+@media (orientation: landscape) {
+  .betting-summary-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 40px;
+  }
+}
+
+.summary-item {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  height: 100%;
+}
+
+.balance {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+.balance-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #ffffff;
+  letter-spacing: 0.3px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+
+.table-id {
+  flex: 0 0 auto;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+.table-id-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #d19a66;
+  letter-spacing: 1px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+
+.bet-range {
+  flex: 0 0 auto;
+  margin-left: 12px;
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+.bet-range-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #ffffff;
+  letter-spacing: 0.3px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+
+/* Responsive adjustments for smaller landscape screens */
+@media (orientation: landscape) and (max-height: 600px) {
+  .betting-summary-bar {
+    padding: 6px 10px;
+    min-height: 36px;
+  }
+
+  .balance-value,
+  .table-id-value,
+  .bet-range-value {
+    font-size: 0.85rem;
+  }
+
+  .transfer-icon {
+    width: 18px;
+    height: 18px;
+  }
+}
+

@@ -1,22 +1,109 @@
 import { useEffect, useRef } from 'react'
 import { useGameStore, GameHistory } from '../store/gameStore'
-import { sessionManager } from '../services/apiService'
+import { sessionManager, apiService } from '../services/apiService'
+import { shouldThrottle, completeThrottle } from '../utils/apiThrottle'
 
-// Production WebSocket URLs - try multiple ports
-const WS_URLS = [
-  'wss://wss.ho8.net:2087/',
-  'wss://wss.ho8.net:2096/',
-]
+// Production WebSocket URLs
+// WebSocket 1: Public/Game State (Broadcast) - table rounds, game status, results
+// Port 2087: Public broadcast channel (no authentication needed)
+const WS_PUBLIC_URL = 'wss://wss.ho8.net:2087/'
+
+// WebSocket 2: User/Account (Private) - balance, bet confirmations, account updates, round cancellations
+// Port 2096: User-specific channel (requires session authentication)
+const WS_USER_URL = 'wss://wss.ho8.net:2096/'
 
 export const useWebSocket = () => {
-  const wsRef = useRef<WebSocket | null>(null)
-  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const reconnectAttemptsRef = useRef(0)
-  const currentUrlIndexRef = useRef(0)
+  // WebSocket 1: Public/Game State (Port 2087)
+  const wsPublicRef = useRef<WebSocket | null>(null)
+  const reconnectPublicTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const reconnectPublicAttemptsRef = useRef(0)
+  
+  // WebSocket 2: User/Account (Port 2096)
+  const wsUserRef = useRef<WebSocket | null>(null)
+  const reconnectUserTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const reconnectUserAttemptsRef = useRef(0)
+  const userHeloIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  
   const { updateGameStatus, setConnectionStatus, addGameHistory, setAccountBalance } = useGameStore()
 
-  const connect = () => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
+  /**
+   * Fetches updated balance from API after game result
+   * This ensures balance reflects wins/losses from settled bets according to server rules
+   * Also fetches wagers for the settled round to verify which bets won/lost
+   */
+  const fetchBalanceAfterResult = async (roundId?: string) => {
+    // Throttle balance fetch to prevent duplicate calls
+    const balanceKey = `balance_websocket_result_${roundId || 'unknown'}`
+    if (!shouldThrottle(balanceKey, 2000)) {
+      if (import.meta.env.DEV) {
+        console.debug('⏸️ Throttled balance fetch after WebSocket result')
+      }
+      return
+    }
+    
+    try {
+      // Always fetch balance from API - server calculates wins/losses based on odds
+      const balance = await apiService.getBalance()
+      completeThrottle(balanceKey)
+      setAccountBalance(balance)
+      
+      if (import.meta.env.DEV) {
+        console.log('💰 Balance updated after game result (settlement):', balance)
+      }
+      
+      // Optionally fetch wagers for the settled round to see which bets won/lost
+      // This helps verify that balance changes match the server's calculations
+      if (roundId && import.meta.env.DEV) {
+        try {
+          const wagersResponse = await apiService.getWagersByRound(roundId)
+          if (wagersResponse && wagersResponse.data) {
+            const settledBets = wagersResponse.data.settle || []
+            const unsettledBets = wagersResponse.data.unsettle || []
+            
+            if (settledBets.length > 0) {
+              console.log('📊 Settled bets for round:', {
+                roundId,
+                settledCount: settledBets.length,
+                bets: settledBets.map((bet: any) => ({
+                  w_no: bet.w_no,
+                  w_bet: bet.w_bet,
+                  w_win: bet.w_win,
+                  w_status: bet.w_status,
+                  w_bettype: bet.w_bettype,
+                  w_betzone: bet.w_betzone
+                }))
+              })
+            }
+            
+            if (import.meta.env.DEV) {
+              console.log('📊 Wagers for round:', {
+                roundId,
+                settled: settledBets.length,
+                unsettled: unsettledBets.length
+              })
+            }
+          }
+        } catch (wagerError) {
+          // Silently fail - this is just for verification/logging
+          if (import.meta.env.DEV) {
+            console.debug('Could not fetch wagers for verification:', wagerError)
+          }
+        }
+      }
+    } catch (error) {
+      // Silently fail - balance polling will catch up
+      if (import.meta.env.DEV) {
+        console.debug('Balance fetch after result failed:', error)
+      }
+    }
+  }
+
+  /**
+   * Connect to WebSocket 1: Public/Game State (Broadcast)
+   * Handles: table rounds, game status, countdown, results
+   */
+  const connectPublic = () => {
+    if (wsPublicRef.current?.readyState === WebSocket.OPEN) {
       return
     }
 
@@ -25,31 +112,28 @@ export const useWebSocket = () => {
     }
 
     // Limit reconnection attempts
-    if (reconnectAttemptsRef.current > 5) {
+    if (reconnectPublicAttemptsRef.current > 5) {
       return
     }
 
     try {
-      reconnectAttemptsRef.current++
+      reconnectPublicAttemptsRef.current++
       setConnectionStatus('connecting')
       
-      // Get URL to try
-      const wsUrl = import.meta.env.VITE_WS_URL || WS_URLS[currentUrlIndexRef.current % WS_URLS.length]
+      // Get URL (Port 2087 for public/game state)
+      const wsUrl = import.meta.env.VITE_WS_PUBLIC_URL || WS_PUBLIC_URL
       const ws = new WebSocket(wsUrl)
 
       ws.onopen = () => {
-        reconnectAttemptsRef.current = 0
+        reconnectPublicAttemptsRef.current = 0
         setConnectionStatus('connected')
         
-        // Send authentication/subscription message with session ID
-        const sessId = sessionManager.getSessionId()
-        if (sessId) {
-          // Try sending auth message - format may vary by server
-          ws.send(JSON.stringify({
-            type: 'auth',
-            sess_id: sessId
-          }))
+        if (import.meta.env.DEV) {
+          console.log('✅ WebSocket 1 (Public/Game State) connected:', wsUrl)
         }
+        
+        // Public WebSocket doesn't need authentication - it broadcasts to all users
+        // No auth message needed
       }
 
       ws.onmessage = (event) => {
@@ -103,11 +187,25 @@ export const useWebSocket = () => {
               // Only update if this is the current table
               if (tableMatches && tableData.trid) {
                 foundMatch = true
+                // Normalize tableId to uppercase (CF01, CF02, etc.) to match server format
+                const normalizedTableId = itemTableId ? itemTableId.toUpperCase() : itemTableId
                 const updateStatus: any = {
-                  tableId: itemTableId,
+                  tableId: normalizedTableId, // Use server's tableId (CF01, CF02, etc.) from WebSocket signal
                   roundId: tableData.trid?.toString() || tableData.r_id?.toString(),
                   currentRound: parseInt(tableData.r_info?.cf_roundno || tableData.r_no || '0', 10),
                   isLive: tableData.enable && tableData.tablestatus === 1
+                }
+                
+                // Log tableId update from server signal
+                if (import.meta.env.DEV && normalizedTableId) {
+                  const currentTableId = useGameStore.getState().tableId
+                  if (normalizedTableId !== currentTableId?.toUpperCase()) {
+                    console.log('🔄 WebSocket: Updating tableId from server signal:', {
+                      old: currentTableId,
+                      new: normalizedTableId,
+                      source: 'WebSocket array data'
+                    })
+                  }
                 }
                 
                 // Extract roundStatus if present - this is critical for betting
@@ -222,11 +320,37 @@ export const useWebSocket = () => {
                   // Add to game history and start betting timer
                   const roundNumber = updateStatus.currentRound || parseInt(tableData.r_info?.cf_roundno || '0', 10)
                   if (roundNumber > 0 && mappedResult) {
-                    addGameHistory({
+                    const history = {
                       round: roundNumber,
                       result: mappedResult,
                       timestamp: Date.now()
-                    })
+                    }
+                    addGameHistory(history)
+                    
+                    // Dispatch event to notify that a NEW result was received from server
+                    // This ensures win message only shows for new results, not on page refresh
+                    if (typeof window !== 'undefined') {
+                      if (import.meta.env.DEV) {
+                        console.log('📢 Dispatching new_game_result_from_server event (WebSocket array):', {
+                          result: history.result,
+                          round: history.round
+                        })
+                      }
+                      window.dispatchEvent(new CustomEvent('new_game_result_from_server', {
+                        detail: {
+                          result: history.result,
+                          round: history.round
+                        }
+                      }))
+                    }
+                    
+                    // Reset totalBet and bets when game result comes (before new round starts)
+                    const { clearBets } = useGameStore.getState()
+                    clearBets()
+                    
+                    if (import.meta.env.DEV) {
+                      console.log('🔄 Game result from WebSocket array, resetting totalBet and bets before new round')
+                    }
                     
                     // Start betting countdown timer (20 seconds) after game result
                     updateGameStatus({
@@ -252,6 +376,15 @@ export const useWebSocket = () => {
             return // Don't process further
           }
           
+          // Handle timestamp-only heartbeat messages: {"ts":"2025-12-08T09:08:13.791Z"}
+          // These are just heartbeats, ignore them (no data property)
+          if (data.ts && !data.type && !data.data && Object.keys(data).length === 1) {
+            if (import.meta.env.DEV) {
+              console.debug('📡 WebSocket 1: Heartbeat received:', data.ts)
+            }
+            return // Just a heartbeat, no action needed
+          }
+          
           // Handle production server format (lobby data updates)
           // Format: { ts: "2025-12-04T08:40:51.241Z", data?: [...], ... }
           if (data.ts && !data.type) {
@@ -271,8 +404,10 @@ export const useWebSocket = () => {
                     itemTableId.toUpperCase() === currentTableId.toUpperCase()
                   
                   if (tableMatches) {
+                    // Normalize tableId to uppercase (CF01, CF02, etc.) to match server format
+                    const normalizedTableId = itemTableId ? itemTableId.toUpperCase() : itemTableId
                     const updateStatus: any = {
-                      tableId: itemTableId,
+                      tableId: normalizedTableId, // Use server's tableId (CF01, CF02, etc.) from WebSocket signal
                       roundId: tableData.trid?.toString() || tableData.r_id?.toString(),
                       currentRound: parseInt(tableData.r_info?.cf_roundno || tableData.r_no || '0', 10),
                       // Don't update countdown from WebSocket - it's managed by game result logic
@@ -348,13 +483,41 @@ export const useWebSocket = () => {
                       const hasValidResult = hasResult && (isSettled || (tableData.drawresult || tableData.result1))
                       
                       if (roundNumber > 0 && hasValidResult) {
-                        addGameHistory({
+                        const history = {
                           round: roundNumber,
                           result: mappedResult,
                           meronCard: tableData.meronCard || tableData.m_card,
                           walaCard: tableData.walaCard || tableData.w_card,
                           timestamp: Date.now()
-                        })
+                        }
+                        addGameHistory(history)
+                        
+                        // Dispatch event to notify that a NEW result was received from server
+                        // This ensures win message only shows for new results, not on page refresh
+                        if (typeof window !== 'undefined') {
+                          if (import.meta.env.DEV) {
+                            console.log('📢 Dispatching new_game_result_from_server event (lobby format):', {
+                              result: history.result,
+                              round: history.round
+                            })
+                          }
+                          window.dispatchEvent(new CustomEvent('new_game_result_from_server', {
+                            detail: {
+                              result: history.result,
+                              round: history.round,
+                              meronCard: history.meronCard,
+                              walaCard: history.walaCard
+                            }
+                          }))
+                        }
+                        
+                        // Reset totalBet and bets when game result comes (before new round starts)
+                        const { clearBets } = useGameStore.getState()
+                        clearBets()
+                        
+                        if (import.meta.env.DEV) {
+                          console.log('🔄 Game result from lobby format, resetting totalBet and bets before new round')
+                        }
                         
                         // Start betting countdown timer (20 seconds) after game result
                         updateGameStatus({
@@ -362,12 +525,20 @@ export const useWebSocket = () => {
                           roundStatus: 1 // Set to betting open
                         })
                         
+                        // Fetch updated balance from API after game result (settlement)
+                        // This ensures balance reflects wins/losses from settled bets according to server rules
+                        if (isSettled) {
+                          const settledRoundId = updateStatus.roundId || tableData.trid?.toString() || tableData.r_id?.toString()
+                          fetchBalanceAfterResult(settledRoundId)
+                        }
+                        
                         if (import.meta.env.DEV) {
                           console.log('✅ Game result from lobby format, starting 20-second betting timer:', {
                             round: roundNumber,
                             result: mappedResult,
                             status: tableData.status,
-                            roundstatus: tableData.roundstatus
+                            roundstatus: tableData.roundstatus,
+                            isSettled
                           })
                         }
                       } else if (import.meta.env.DEV && hasResult) {
@@ -400,11 +571,43 @@ export const useWebSocket = () => {
                 }
                 addGameHistory(history)
                 
+                // Dispatch event to notify that a NEW result was received from server
+                // This ensures win message only shows for new results, not on page refresh
+                if (typeof window !== 'undefined') {
+                  if (import.meta.env.DEV) {
+                    console.log('📢 Dispatching new_game_result_from_server event (game_result):', {
+                      result: history.result,
+                      round: history.round
+                    })
+                  }
+                  window.dispatchEvent(new CustomEvent('new_game_result_from_server', {
+                    detail: {
+                      result: history.result,
+                      round: history.round,
+                      meronCard: history.meronCard,
+                      walaCard: history.walaCard
+                    }
+                  }))
+                }
+                
+                // Reset totalBet and bets when game result comes (before new round starts)
+                const { clearBets } = useGameStore.getState()
+                clearBets()
+                
+                if (import.meta.env.DEV) {
+                  console.log('🔄 Game result received in WebSocket, resetting totalBet and bets before new round')
+                }
+                
                 // Start betting countdown timer (20 seconds) after game result
                 updateGameStatus({
                   countdown: 20,
                   roundStatus: 1 // Set to betting open (status 1)
                 })
+                
+                // Fetch updated balance from API after game result (settlement)
+                // This ensures balance reflects wins/losses from settled bets according to server rules
+                const settledRoundId = data.payload?.roundId || data.payload?.r_id || data.payload?.trid
+                fetchBalanceAfterResult(settledRoundId?.toString())
                 
                 if (import.meta.env.DEV) {
                   console.log('✅ Game result received, starting 20-second betting timer')
@@ -427,6 +630,16 @@ export const useWebSocket = () => {
             case 'tableround':
               // Update roundId from tableround message
               const tableroundUpdate: any = { ...data.payload }
+              
+              // Normalize tableId from server signal (CF01, CF02, etc.)
+              if (data.payload?.tableId || data.payload?.tableid || data.payload?.t_id) {
+                const serverTableId = data.payload.tableId || data.payload.tableid || data.payload.t_id
+                tableroundUpdate.tableId = serverTableId ? serverTableId.toUpperCase() : serverTableId
+                if (import.meta.env.DEV) {
+                  console.log('🔄 WebSocket tableround: Using tableId from server signal:', tableroundUpdate.tableId)
+                }
+              }
+              
               // Ensure roundId is properly extracted
               if (data.payload?.roundId || data.payload?.r_id || data.payload?.trid) {
                 tableroundUpdate.roundId = (data.payload.roundId || data.payload.r_id || data.payload.trid).toString()
@@ -516,6 +729,13 @@ export const useWebSocket = () => {
                 const hasValidResult = hasResult && (isSettled || (data.payload.drawresult || data.payload.result1))
                 
                 if (roundNumber > 0 && hasValidResult) {
+                  // Fetch updated balance from API after game result (settlement)
+                  // This ensures balance reflects wins/losses from settled bets according to server rules
+                  if (isSettled) {
+                    const settledRoundId = tableroundUpdate.roundId || data.payload?.r_id?.toString() || data.payload?.trid?.toString()
+                    fetchBalanceAfterResult(settledRoundId)
+                  }
+                  
                   const history: GameHistory = {
                     round: roundNumber,
                     result: mappedResult,
@@ -523,6 +743,33 @@ export const useWebSocket = () => {
                     walaCard: data.payload.walaCard || data.payload.w_card
                   }
                   addGameHistory(history)
+                  
+                  // Dispatch event to notify that a NEW result was received from server
+                  // This ensures win message only shows for new results, not on page refresh
+                  if (typeof window !== 'undefined') {
+                    if (import.meta.env.DEV) {
+                      console.log('📢 Dispatching new_game_result_from_server event (tableround):', {
+                        result: history.result,
+                        round: history.round
+                      })
+                    }
+                    window.dispatchEvent(new CustomEvent('new_game_result_from_server', {
+                      detail: {
+                        result: history.result,
+                        round: history.round,
+                        meronCard: history.meronCard,
+                        walaCard: history.walaCard
+                      }
+                    }))
+                  }
+                  
+                  // Reset totalBet and bets when game result comes (before new round starts)
+                  const { clearBets } = useGameStore.getState()
+                  clearBets()
+                  
+                  if (import.meta.env.DEV) {
+                    console.log('🔄 Game result extracted from tableround, resetting totalBet and bets before new round')
+                  }
                   
                   // Start betting countdown timer (20 seconds) after game result
                   updateGameStatus({
@@ -588,48 +835,337 @@ export const useWebSocket = () => {
       ws.onclose = () => {
         setConnectionStatus('disconnected')
         
-        // Try next URL on reconnect
-        currentUrlIndexRef.current++
+        if (import.meta.env.DEV) {
+          console.log('⚠️ WebSocket 1 (Public) closed, attempting reconnect...')
+        }
         
         // Reconnect with exponential backoff
-        if (reconnectAttemptsRef.current <= 5) {
-          const delay = Math.min(5000 * reconnectAttemptsRef.current, 30000)
-          reconnectTimeoutRef.current = setTimeout(() => {
-            if (wsRef.current?.readyState !== WebSocket.OPEN) {
-              connect()
+        if (reconnectPublicAttemptsRef.current <= 5) {
+          const delay = Math.min(5000 * reconnectPublicAttemptsRef.current, 30000)
+          reconnectPublicTimeoutRef.current = setTimeout(() => {
+            if (wsPublicRef.current?.readyState !== WebSocket.OPEN) {
+              connectPublic()
             }
           }, delay)
         }
       }
 
-      wsRef.current = ws
-    } catch {
+      wsPublicRef.current = ws
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('❌ Failed to connect WebSocket 1 (Public):', error)
+      }
       setConnectionStatus('disconnected')
     }
   }
 
-  const disconnect = () => {
-    // Clear any pending reconnection attempts
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current)
-      reconnectTimeoutRef.current = null
+  /**
+   * Connect to WebSocket 2: User/Account (Private)
+   * Handles: balance updates, bet confirmations, account events, round cancellations
+   */
+  const connectUser = () => {
+    if (wsUserRef.current?.readyState === WebSocket.OPEN) {
+      return
     }
-    reconnectAttemptsRef.current = 0
+
+    if (typeof WebSocket === 'undefined') {
+      return
+    }
+
+    // Limit reconnection attempts
+    if (reconnectUserAttemptsRef.current > 5) {
+      return
+    }
+
+    const sessId = sessionManager.getSessionId()
+    if (!sessId) {
+      // Can't connect user WebSocket without session - will retry when session is available
+      if (import.meta.env.DEV) {
+        console.warn('⚠️ Cannot connect WebSocket 2 (User) - no session ID. Will retry when session is available.')
+        console.log('💡 To connect user WebSocket, ensure session ID is set via URL parameter or login.')
+      }
+      // Don't increment attempts counter since we'll retry when session is available
+      reconnectUserAttemptsRef.current = Math.max(0, reconnectUserAttemptsRef.current - 1)
+      return
+    }
     
-    if (wsRef.current) {
-      wsRef.current.close()
-      wsRef.current = null
+    if (import.meta.env.DEV) {
+      console.log('🔌 Attempting to connect WebSocket 2 (User/Account) to:', WS_USER_URL)
+    }
+
+    try {
+      reconnectUserAttemptsRef.current++
+      
+      // Get URL (Port 2096 for user/account)
+      const wsUrl = import.meta.env.VITE_WS_USER_URL || WS_USER_URL
+      const ws = new WebSocket(wsUrl)
+
+      ws.onopen = () => {
+        reconnectUserAttemptsRef.current = 0
+        
+        if (import.meta.env.DEV) {
+          console.log('✅ WebSocket 2 (User/Account) connected:', wsUrl)
+        }
+        
+        // Send authentication with session ID (required for user WebSocket)
+        ws.send(JSON.stringify({
+          sess_id: sessId
+        }))
+        
+        // Start heartbeat (send empty string every 7 seconds per original site)
+        userHeloIntervalRef.current = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send('') // Send empty string as heartbeat (per original site)
+            if (import.meta.env.DEV) {
+              console.debug('📡 WebSocket 2: Sent heartbeat')
+            }
+          } else if (ws.readyState === WebSocket.CLOSED) {
+            // Connection closed, reload page (as per original site behavior)
+            if (import.meta.env.DEV) {
+              console.warn('⚠️ WebSocket 2 closed, should reload page...')
+            }
+            // location.reload() // Uncomment if you want auto-reload on disconnect
+          }
+        }, 7000) // Every 7 seconds per original site
+      }
+
+      ws.onmessage = (event) => {
+        try {
+          // Handle plain text HELO response (if any)
+          if (typeof event.data === 'string' && event.data.trim() === 'HELO') {
+            if (import.meta.env.DEV) {
+              console.debug('📡 WebSocket 2: Received HELO heartbeat response')
+            }
+            return
+          }
+          
+          // Handle JSON messages
+          const data = JSON.parse(event.data)
+          
+          if (import.meta.env.DEV) {
+            console.log('📡 WebSocket 2 (User) message received:', data)
+          }
+          
+          // Handle odds updates (PRIMARY METHOD - real-time odds)
+          // Format: { "CF01": { "21001:M": { "o_opentype": "M", "o_odds": "0.92" }, ... }, "act": "settle", ... }
+          const { tableId: currentTableId } = useGameStore.getState()
+          if (currentTableId && data[currentTableId]) {
+            const oddsData = data[currentTableId]
+            if (typeof oddsData === 'object' && !Array.isArray(oddsData)) {
+              // Emit odds update event for BettingInterface to handle
+              window.dispatchEvent(new CustomEvent('odds_update', {
+                detail: { tableId: currentTableId, odds: oddsData }
+              }))
+              
+              if (import.meta.env.DEV) {
+                console.log('📊 WebSocket 2: Real-time odds update received:', {
+                  tableId: currentTableId,
+                  oddsKeys: Object.keys(oddsData),
+                  odds: oddsData
+                })
+              }
+            }
+          }
+          
+          // Handle settlement notifications
+          if (data.act === 'settle') {
+            if (import.meta.env.DEV) {
+              console.log('🎉 Round settled:', {
+                roundId: data.r_id,
+                result: data.r_drawresult,
+                win: data.win
+              })
+            }
+            // Emit settlement event
+            window.dispatchEvent(new CustomEvent('round_settled', {
+              detail: {
+                roundId: data.r_id,
+                result: data.r_drawresult,
+                win: data.win
+              }
+            }))
+          }
+          
+          // Handle user-specific events
+          switch (data.act) {
+            case 'cancel':
+              // Round cancellation: {"act":"cancel","r_id":1267470,"tableid":"CF05","reason":"NO FIGHT"}
+              if (import.meta.env.DEV) {
+                console.log('⚠️ Round cancelled:', {
+                  roundId: data.r_id,
+                  tableId: data.tableid,
+                  reason: data.reason
+                })
+              }
+              
+              // Update game status to reflect cancellation
+              const { tableId: currentTableIdCancel } = useGameStore.getState()
+              if (data.tableid && data.tableid.toUpperCase() === currentTableIdCancel?.toUpperCase()) {
+                // Clear bets if this is the current table
+                const { clearBets } = useGameStore.getState()
+                clearBets()
+                
+                // Optionally show notification to user about cancellation
+                if (import.meta.env.DEV) {
+                  console.log('🔄 Cleared bets due to round cancellation:', data.reason)
+                }
+              }
+              break
+              
+            case 'bet_confirmation':
+            case 'bet_confirm':
+              // Bet confirmation with balance update
+              if (data.balance !== undefined) {
+                setAccountBalance(data.balance)
+                if (import.meta.env.DEV) {
+                  console.log('💰 Balance updated from bet confirmation:', data.balance)
+                }
+              }
+              break
+              
+            case 'account_update':
+            case 'balance_update':
+              // Account/balance update
+              if (data.balance !== undefined) {
+                setAccountBalance(data.balance)
+                if (import.meta.env.DEV) {
+                  console.log('💰 Balance updated from account update:', data.balance)
+                }
+              }
+              break
+              
+            default:
+              // Handle other user events if needed
+              if (import.meta.env.DEV && data.act && data.act !== 'settle') {
+                console.log('📡 WebSocket 2: Unknown user event:', data.act, data)
+              }
+              break
+          }
+          
+          // Also handle direct balance updates (not in act format)
+          if (data.balance !== undefined && !data.act) {
+            setAccountBalance(data.balance)
+            if (import.meta.env.DEV) {
+              console.log('💰 Balance updated from WebSocket 2:', data.balance)
+            }
+          }
+        } catch (error) {
+          // Might be plain text or other format
+          if (import.meta.env.DEV) {
+            console.debug('WebSocket 2: Could not parse message as JSON:', event.data)
+          }
+        }
+      }
+
+      ws.onerror = (error) => {
+        if (import.meta.env.DEV) {
+          console.error('❌ WebSocket 2 (User) error:', error)
+        }
+      }
+
+      ws.onclose = () => {
+        if (import.meta.env.DEV) {
+          console.log('⚠️ WebSocket 2 (User) closed, attempting reconnect...')
+        }
+        
+        // Clear HELO interval
+        if (userHeloIntervalRef.current) {
+          clearInterval(userHeloIntervalRef.current)
+          userHeloIntervalRef.current = null
+        }
+        
+        // Reconnect with exponential backoff
+        if (reconnectUserAttemptsRef.current <= 5) {
+          const delay = Math.min(5000 * reconnectUserAttemptsRef.current, 30000)
+          reconnectUserTimeoutRef.current = setTimeout(() => {
+            if (wsUserRef.current?.readyState !== WebSocket.OPEN) {
+              connectUser()
+            }
+          }, delay)
+        }
+      }
+
+      wsUserRef.current = ws
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('❌ Failed to connect WebSocket 2 (User):', error)
+      }
     }
   }
 
-  const sendMessage = (message: any) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(message))
+  /**
+   * Connect both WebSockets
+   */
+  const connect = () => {
+    connectPublic()
+    connectUser()
+  }
+
+  const disconnect = () => {
+    // Disconnect Public WebSocket
+    if (reconnectPublicTimeoutRef.current) {
+      clearTimeout(reconnectPublicTimeoutRef.current)
+      reconnectPublicTimeoutRef.current = null
+    }
+    reconnectPublicAttemptsRef.current = 0
+    
+    if (wsPublicRef.current) {
+      wsPublicRef.current.close()
+      wsPublicRef.current = null
+    }
+    
+    // Disconnect User WebSocket
+    if (reconnectUserTimeoutRef.current) {
+      clearTimeout(reconnectUserTimeoutRef.current)
+      reconnectUserTimeoutRef.current = null
+    }
+    if (userHeloIntervalRef.current) {
+      clearInterval(userHeloIntervalRef.current)
+      userHeloIntervalRef.current = null
+    }
+    reconnectUserAttemptsRef.current = 0
+    
+    if (wsUserRef.current) {
+      wsUserRef.current.close()
+      wsUserRef.current = null
+    }
+    
+    setConnectionStatus('disconnected')
+  }
+
+  const sendMessage = (message: any, target: 'public' | 'user' = 'public') => {
+    if (target === 'public') {
+      if (wsPublicRef.current?.readyState === WebSocket.OPEN) {
+        wsPublicRef.current.send(JSON.stringify(message))
+      }
+    } else {
+      if (wsUserRef.current?.readyState === WebSocket.OPEN) {
+        wsUserRef.current.send(JSON.stringify(message))
+      }
     }
   }
 
+  // Listen for session availability and connect user WebSocket when session is ready
   useEffect(() => {
+    const checkAndConnectUser = () => {
+      const sessId = sessionManager.getSessionId()
+      if (sessId && wsUserRef.current?.readyState !== WebSocket.OPEN) {
+        // Session is available but user WebSocket not connected - connect it
+        if (import.meta.env.DEV) {
+          console.log('📡 Session available, connecting user WebSocket...')
+        }
+        connectUser()
+      }
+    }
+    
+    // Check immediately
+    checkAndConnectUser()
+    
+    // Also check periodically (in case session is set later)
+    const interval = setInterval(checkAndConnectUser, 2000)
+    
     return () => {
+      clearInterval(interval)
       disconnect()
     }
   }, [])

@@ -10,19 +10,80 @@
   overflow-y: visible;
   background: linear-gradient(135deg, rgba(10, 14, 39, 0.95) 0%, rgba(5, 8, 18, 0.95) 100%);
   position: relative;
+  flex: 1 1 auto;
+}
+
+/* Error message fade animations */
+.betting-error {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+}
+
+.betting-error.fade-in {
+  animation: fadeInError 0.3s ease-out;
+}
+
+.betting-error.fade-out {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-20px);
+}
+
+@keyframes fadeInError {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }
 
 .betting-area {
-  flex: 1;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
   padding: 0.6rem;
-  min-height: 200px;
+  min-height: 0; /* Allow shrinking */
   width: 100%;
   max-width: 100%;
   overflow-x: hidden;
   overflow-y: visible;
+  transition: opacity 0.3s ease, filter 0.3s ease;
+}
+
+/* Greyed-out state when betting is closed */
+.betting-area.betting-disabled {
+  opacity: 0.5;
+  filter: grayscale(70%);
+  pointer-events: none;
+  background: rgba(60, 60, 60, 0.3);
+  border-radius: 8px;
+}
+
+.betting-area.betting-disabled .bet-button {
+  opacity: 0.6;
+  filter: grayscale(80%);
+  cursor: not-allowed;
+  pointer-events: none;
+  background: rgba(80, 80, 80, 0.5) !important;
+}
+
+.betting-area.betting-disabled .main-bet.meron {
+  background: rgba(100, 0, 0, 0.6) !important;
+  border-color: rgba(255, 215, 0, 0.3) !important;
+}
+
+.betting-area.betting-disabled .main-bet.wala {
+  background: rgba(0, 0, 100, 0.6) !important;
+  border-color: rgba(255, 215, 0, 0.3) !important;
+}
+
+.betting-area.betting-disabled .main-bet.draw {
+  background: rgba(0, 80, 0, 0.6) !important;
+  border-color: rgba(255, 215, 0, 0.3) !important;
 }
 
 /* Main Bets */
@@ -111,13 +172,63 @@
 }
 
 .main-bet.meron {
-  background: #CC0000 ;
+  background: #CC0000;
   color: #C0C0C0;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Rooster watermark for Meron betting area - full size background */
+.main-bet.meron::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url('/rooster-watermark.png.jpg');
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0.3;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Ensure content stays above watermark */
+.main-bet.meron > * {
+  position: relative;
+  z-index: 1;
 }
 
 .main-bet.wala {
   background: #1A1A7A;
   color: #C0C0C0;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Wala watermark for Wala betting area - full size background */
+.main-bet.wala::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url('/Wala.jpg');
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0.3;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Ensure content stays above watermark */
+.main-bet.wala > * {
+  position: relative;
+  z-index: 1;
 }
 
 .main-bet.draw {
@@ -197,6 +308,19 @@
   font-size: 1rem;
   line-height: 1;
   max-width: 100%;
+}
+
+/* Pending bet amount (unconfirmed) - shown in gold/yellow */
+.bet-amount-display.pending {
+  color: #ffd700;
+  font-weight: 600;
+  opacity: 0.95;
+}
+
+/* Confirmed bet amount - shown in white */
+.bet-amount-display.confirmed {
+  color: #ffffff;
+  font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
   word-break: break-word;
@@ -281,6 +405,10 @@
   background: transparent;
   border-top: none;
   overflow-x: hidden;
+  flex-shrink: 0;
+  position: sticky; /* Keep controls visible when scrolling */
+  bottom: 0;
+  z-index: 100;
 }
 
 /* Top Row: Dark Gray - Controls with Timestamp */
@@ -332,6 +460,9 @@
   .betting-area {
     padding: 0.3rem;
     gap: 0.2rem;
+    min-height: 0; /* Allow shrinking */
+    flex: 1 1 auto; /* Allow flex growing */
+    overflow-y: auto; /* Allow scrolling if needed */
   }
   
   /* Main Bets - Show in a row on mobile */
@@ -350,7 +481,7 @@
   }
   
   .main-bet {
-    min-height: 120px;
+    min-height: 100px; /* Reduced from 120px */
     padding: 0.5rem 0.4rem;
     font-size: 0.9rem;
   }
@@ -457,7 +588,7 @@
   }
 
   .control-bar-top {
-    padding: 0.7rem 0.8rem;
+    padding: 0.2rem 0.8rem;
     gap: 0.6rem;
   }
 

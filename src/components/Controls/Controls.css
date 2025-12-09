@@ -2,7 +2,7 @@
 .controls-inline {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: 0.5rem;
   flex-shrink: 0;
   width: 100%;
@@ -12,8 +12,7 @@
 }
 
 .controls-left-group,
-.controls-center-group,
-.controls-right-group {
+.controls-center-group {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -22,13 +21,8 @@
 .controls-center-group {
   align-items: center;
   gap: 0.5rem;
-}
-
-.controls-right-group {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 1rem;
+  flex: 1;
+  justify-content: space-evenly;
 }
 
 .controls-timestamp {
@@ -112,6 +106,38 @@
 .control-btn-circle.clear.disabled:hover,
 .control-btn-circle.clear:disabled:hover {
   background: rgba(53, 50, 50, 0.5) !important;
+}
+
+/* Greyed-out state when betting is closed */
+.controls-inline.betting-closed {
+  opacity: 0.6;
+  filter: grayscale(60%);
+}
+
+.controls-inline.betting-closed .control-btn-circle {
+  opacity: 0.5;
+  filter: grayscale(70%);
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.controls-inline.betting-closed .control-btn-circle.confirm,
+.controls-inline.betting-closed .control-btn-circle.clear {
+  background: rgba(80, 80, 80, 0.6) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.controls-inline.betting-closed .control-btn-circle.confirm.has-pending-bet {
+  background: rgba(80, 80, 80, 0.6) !important;
+  animation: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+.controls-inline.betting-closed .control-btn-circle.confirm.has-pending-bet::before,
+.controls-inline.betting-closed .control-btn-circle.confirm.has-pending-bet::after {
+  display: none;
 }
 
 /* Casino-style pulsing glow animation for confirm button when bet is pending */
@@ -202,8 +228,7 @@
   }
 
   .controls-left-group,
-  .controls-center-group,
-  .controls-right-group {
+  .controls-center-group {
     flex-direction: column;
     align-items: center;
     gap: 0.5rem;
@@ -211,10 +236,6 @@
   }
 
   .controls-center-group {
-    padding-left: 0;
-  }
-
-  .controls-right-group {
     padding-left: 0;
   }
 
@@ -235,8 +256,7 @@
   }
 
   .controls-left-group,
-  .controls-center-group,
-  .controls-right-group {
+  .controls-center-group {
     gap: 1rem;
   }
 }
@@ -268,18 +288,10 @@
     gap: 0.75rem !important;
     width: auto !important;
     flex: 1 !important;
-    justify-content: center !important;
+    justify-content: space-evenly !important;
     padding-left: 0 !important;
   }
 
-  .controls-right-group {
-    flex-direction: row !important;
-    align-items: center !important;
-    gap: 0.75rem !important;
-    width: auto !important;
-    flex-shrink: 0 !important;
-    padding-left: 0 !important;
-  }
 
   .control-btn-circle {
     width: 48px !important;
@@ -287,8 +299,4 @@
     flex-shrink: 0 !important;
   }
 
-  /* Hide menu button in PC mode */
-  .menu-pc-hide {
-    display: none !important;
-  }
 }

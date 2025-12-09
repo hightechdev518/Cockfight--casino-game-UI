@@ -4,6 +4,19 @@ import App from './App.tsx'
 import ErrorBoundary from './components/ErrorBoundary'
 import './index.css'
 
+// Filter FLV.js audio frame drop warnings (these are normal and can be ignored)
+const originalWarn = console.warn
+console.warn = (...args: any[]) => {
+  const message = args.join(' ')
+  // Suppress FLV.js MP4Remuxer audio frame drop warnings
+  if (message.includes('MP4Remuxer') && message.includes('Dropping') && message.includes('audio frame')) {
+    // These warnings are normal - FLV.js drops audio frames to maintain sync
+    // They don't indicate errors, just timing adjustments in the stream
+    return
+  }
+  originalWarn.apply(console, args)
+}
+
 // Global error handler - only log unexpected errors
 window.addEventListener('error', (event) => {
   // Filter out expected errors (network, WebSocket, etc.)

@@ -1,5 +1,5 @@
 .game-history {
-  background: #e0e0e0;
+  background: rgba(60, 60, 60, 0.95);
   border-radius: 6px;
   padding: 0.6rem;
   min-height: fit-content;
@@ -19,21 +19,38 @@
 .game-history.detailed {
   overflow: hidden; /* Prevent page scrolling */
   overscroll-behavior: none;
-  background: #e0e0e0;
+  background: rgba(60, 60, 60, 0.95);
   position: relative;
-  height: 280px; /* Match App.css - balanced */
-  max-height: 280px;
+  height: 180px; /* Reduced for mobile portrait */
+  max-height: 180px;
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   /* Ensure status bar is visible */
-  min-height: 280px;
+  min-height: 180px;
+}
+
+/* In landscape mode, the betting summary bar is part of the panel */
+/* The roadmap-container will shrink to fit both status bar and summary bar */
+@media (orientation: landscape) {
+  .game-history.detailed {
+    /* Keep same height, but allow internal content to adjust */
+    height: 280px;
+    max-height: 280px;
+    min-height: 280px;
+  }
+  
+  /* Make roadmap container flexible to accommodate summary bar */
+  .game-history.detailed .roadmap-container {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
 }
 
 /* Roadmap Styles */
 .game-history.roadmap {
   padding: 0;
-  background: #e0e0e0;
+  background: rgba(60, 60, 60, 0.95);
 }
 
 .roadmap-header-controls {
@@ -41,27 +58,29 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.6rem;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   flex-shrink: 0;
   gap: 0.5rem;
+  background: rgba(60, 60, 60, 0.95);
 }
 
 .roadmap-title {
   margin: 0;
   font-size: 1rem;
   font-weight: bold;
-  color: #333;
+  color: #e0e0e0;
 }
 
 .summary-toggle-btn {
-  background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+  background: rgba(60, 60, 60, 0.95);
   border: none;
   border-radius: 6px;
-  width: 32px;
+  padding: 6px 12px;
   height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   font-size: 1.1rem;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -70,13 +89,27 @@
 }
 
 .summary-toggle-btn:hover {
+  background: rgba(70, 70, 70, 0.95);
   transform: scale(1.05);
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
 }
 
 .summary-toggle-btn:active {
+  background: rgba(50, 50, 50, 0.95);
   transform: scale(0.95);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.summary-toggle-btn .info-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.summary-toggle-btn .lobby-text {
+  color: #e0e0e0;
+  font-size: 0.9rem;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
 }
 
 .roadmap-container {
@@ -84,18 +117,19 @@
   flex: 1 1 auto;
   overflow-y: auto;
   overflow-x: auto;
+  background: rgba(60, 60, 60, 0.95);
   background-image: 
-    radial-gradient(circle, #999 1px, transparent 1px);
+    radial-gradient(circle, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
   background-size: 20px 20px;
   background-position: 0 0;
   min-height: 0;
-  max-height: calc(280px - 124px);
+  max-height: calc(180px - 50px); /* Adjusted for reduced panel height */
   width: 100%;
   display: flex;
   flex-direction: column;
   /* Allow horizontal scrolling for roadmap */
   scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.3) rgba(0, 0, 0, 0.1);
+  scrollbar-color: rgba(255, 255, 255, 0.2) rgba(0, 0, 0, 0.3);
   -webkit-overflow-scrolling: touch;
 }
 
@@ -138,10 +172,11 @@
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  border-width: 2.5px;
+  border-width: 3px;
   border-style: solid;
-  background: transparent;
+  background: rgba(60, 60, 60, 0.95);
   transition: transform 0.15s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .bead-item:hover .bead-ring {
@@ -150,17 +185,20 @@
 
 /* Bead colors - Red for Meron */
 .bead-item.red .bead-ring {
-  border-color: #CC0000;
+  border-color: #FF4444;
+  box-shadow: 0 2px 6px rgba(255, 68, 68, 0.5);
 }
 
 /* Bead colors - Blue for Wala */
 .bead-item.blue .bead-ring {
-  border-color: #0066CC;
+  border-color: #4488FF;
+  box-shadow: 0 2px 6px rgba(68, 136, 255, 0.5);
 }
 
 /* Bead colors - Green for Draw */
 .bead-item.green .bead-ring {
-  border-color: #00AA44;
+  border-color: #44FF88;
+  box-shadow: 0 2px 6px rgba(68, 255, 136, 0.5);
 }
 
 /* Simple variant bead road */
@@ -189,22 +227,26 @@
   width: 80%;
   height: 80%;
   border-radius: 50%;
-  border-width: 2px;
+  border-width: 3px;
   border-style: solid;
-  background: transparent;
+  background: rgba(60, 60, 60, 0.95);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 /* Simple variant bead colors */
 .bead-item-simple.red .bead-ring-simple {
-  border-color: #CC0000;
+  border-color: #FF4444;
+  box-shadow: 0 2px 6px rgba(255, 68, 68, 0.5);
 }
 
 .bead-item-simple.blue .bead-ring-simple {
-  border-color: #0066CC;
+  border-color: #4488FF;
+  box-shadow: 0 2px 6px rgba(68, 136, 255, 0.5);
 }
 
 .bead-item-simple.green .bead-ring-simple {
-  border-color: #00AA44;
+  border-color: #44FF88;
+  box-shadow: 0 2px 6px rgba(68, 255, 136, 0.5);
 }
 
 /* Stats bar for simple variant */
@@ -214,33 +256,40 @@
   align-items: center;
   gap: 1rem;
   padding: 0.5rem;
-  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
   flex-shrink: 0;
+  background: rgba(60, 60, 60, 0.95);
 }
 
 .stat-dot {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  border: 2px solid;
+  border-width: 3px;
+  border-style: solid;
+  background: rgba(60, 60, 60, 0.95);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .stat-dot.red {
-  border-color: #CC0000;
+  border-color: #FF4444;
+  box-shadow: 0 2px 6px rgba(255, 68, 68, 0.5);
 }
 
 .stat-dot.blue {
-  border-color: #0066CC;
+  border-color: #4488FF;
+  box-shadow: 0 2px 6px rgba(68, 136, 255, 0.5);
 }
 
 .stat-dot.green {
-  border-color: #00AA44;
+  border-color: #44FF88;
+  box-shadow: 0 2px 6px rgba(68, 255, 136, 0.5);
 }
 
 .stat-count {
   font-size: 0.85rem;
   font-weight: bold;
-  color: #333;
+  color: #e0e0e0;
   margin-left: 0.25rem;
 }
 
@@ -251,15 +300,16 @@
 }
 
 .roadmap-container::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.1);
-}
-
-.roadmap-container::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.3);
 }
 
+.roadmap-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
 .roadmap-container::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(255, 255, 255, 0.3);
 }
 
 /* Scrollbar styles removed - no scrolling needed */
@@ -347,8 +397,8 @@
   justify-content: space-between;
   align-items: center;
   flex-shrink: 0;
-  border-top: 2px solid rgba(0, 0, 0, 0.1);
-  background: #e0e0e0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(60, 60, 60, 0.95);
   width: 100%;
   box-sizing: border-box;
   min-height: 50px; /* Ensure adequate height */
@@ -365,7 +415,7 @@
 .round-number {
   font-weight: bold;
   font-size: 0.85rem;  
-  color: #000;
+  color: #e0e0e0;
 }
 
 .stat-item {
@@ -398,31 +448,36 @@
   background: #00cc66;
 }
 
-/* Status bar stat dots (outlined rings matching bead road) */
+/* Status bar stat dots (outlined circles matching bead road) */
 .roadmap-status-bar .stat-dot {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  border: 2.5px solid;
-  background: transparent;
+  border-width: 3px;
+  border-style: solid;
+  background: rgba(60, 60, 60, 0.95);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .roadmap-status-bar .stat-dot.red {
-  border-color: #CC0000;
+  border-color: #FF4444;
+  box-shadow: 0 2px 6px rgba(255, 68, 68, 0.5);
 }
 
 .roadmap-status-bar .stat-dot.blue {
-  border-color: #0066CC;
+  border-color: #4488FF;
+  box-shadow: 0 2px 6px rgba(68, 136, 255, 0.5);
 }
 
 .roadmap-status-bar .stat-dot.green {
-  border-color: #00AA44;
+  border-color: #44FF88;
+  box-shadow: 0 2px 6px rgba(68, 255, 136, 0.5);
 }
 
 .stat-value {
   font-size: 0.85rem;
   font-weight: bold;
-  color: #000;
+  color: #e0e0e0;
 }
 
 .status-right {
@@ -503,7 +558,7 @@
 
 .toggle-label {
   font-size: 0.8rem;
-  color: #333;
+  color: #e0e0e0;
   font-weight: 500;
 }
 

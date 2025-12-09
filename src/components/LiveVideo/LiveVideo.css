@@ -35,6 +35,42 @@
   background: #000;
 }
 
+/* Loading poster/image */
+.video-loading-poster {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  min-width: 100%;
+  min-height: 100%;
+  background-image: url('/waiting.png');
+  background-size: 200% 260%;
+  background-repeat: no-repeat;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* Loading spinner animation */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid rgba(255, 255, 255, 0.3);
+  border-top: 4px solid #ffd700;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
 .live-video {
   width: 100%;
   height: 100%;
@@ -229,12 +265,39 @@
   gap: 0.5rem;
   background: transparent;
   padding: 0;
+  position: relative;
 }
 
 .video-controls-row {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-wrap: nowrap;
+}
+
+.video-controls-row .control-icon {
+  animation: fadeInScale 0.2s ease-out;
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.menu-button {
+  border: 2px solid #ffd700 !important;
+  background: rgba(60, 60, 60, 0.9) !important;
+}
+
+.menu-button:hover {
+  background: rgba(100, 100, 100, 1) !important;
+  border-color: #ffd700 !important;
 }
 
 .control-icon {
@@ -337,6 +400,52 @@
   stroke: rgba(255, 255, 255, 0.1);
 }
 
+/* StopBet Countdown - Shows when betting stops (3->2->1->0) */
+.countdown-badge.stopbet-countdown {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 120px;
+  height: 120px;
+  z-index: 10001;
+  animation: stopbetPulse 0.5s ease-in-out;
+}
+
+.countdown-badge.stopbet-countdown .CircularProgressbar-path {
+  stroke: #dc2626;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.3s linear;
+}
+
+.countdown-badge.stopbet-countdown .CircularProgressbar-text {
+  fill: #dc2626; /* Match the path color */
+  font-size: 48px;
+  font-weight: bold;
+  text-shadow: 0 0 10px rgba(220, 38, 38, 0.8);
+  animation: stopbetTextPulse 0.5s ease-in-out;
+}
+
+@keyframes stopbetPulse {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+}
+
+@keyframes stopbetTextPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.2);
+  }
+}
+
 
 .video-overlay-center {
   position: absolute;
@@ -437,6 +546,27 @@
   text-shadow: 0 0 20px rgba(59, 130, 246, 0.8), 0 4px 8px rgba(0, 0, 0, 0.8);
 }
 
+.win-message-amount {
+  font-size: 2rem;
+  font-weight: 700;
+  text-align: center;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 2px solid rgba(255, 255, 255, 0.2);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+  animation: winMessagePulse 1s ease-in-out infinite;
+}
+
+.win-message-amount.win {
+  color: #10b981;
+  text-shadow: 0 0 20px rgba(16, 185, 129, 0.8), 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.win-message-amount.loss {
+  color: #ef4444;
+  text-shadow: 0 0 20px rgba(239, 68, 68, 0.8), 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
 @keyframes winMessageFadeIn {
   from {
     opacity: 0;
@@ -522,6 +652,12 @@
   .win-message-text {
     font-size: 2rem;
     letter-spacing: 2px;
+  }
+
+  .win-message-amount {
+    font-size: 1.5rem;
+    margin-top: 12px;
+    padding-top: 12px;
   }
 
   .win-message-content {
