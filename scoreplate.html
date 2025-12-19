@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Scoreplate</title>
+<style>
+  :root{--rows:6;--cols:120;--cell:44px;--gap:6px;}
+  *{box-sizing:border-box}
+  body{font-family:system-ui, "Segoe UI", Roboto, "Noto Sans TC"; background:#0f0f10; color:#eee; margin:12px;}
+  h1{margin:0 0 8px 0; font-size:18px;}
+  .topbar{display:flex; align-items:center; gap:10px; margin-bottom:8px; flex-wrap:wrap;}
+  .btn{padding:8px 12px; border-radius:6px; border:none; cursor:pointer; font-weight:700;}
+  .btn-b{background:#c43e3e; color:white;}
+  .btn-p{background:#2f6fff; color:white;}
+  .btn-t{background:#17c964; color:white;}
+  .btn-clear{background:#444; color:#fff;}
+  .controls{display:flex; gap:8px; align-items:center;}
+  .info{font-size:13px; color:#cfcfcf; margin-left:8px;}
+  .wrap{border-radius:8px; padding:10px; background:linear-gradient(180deg,#141213,#0b0b0b); border:1px solid rgba(255,255,255,0.04);}
+  .board{display:flex; gap:var(--gap); padding:10px; overflow:auto; height: calc(var(--cell) * var(--rows) + var(--gap) * (var(--rows)-1) + 20px); }
+  .col{display:flex; flex-direction:column; gap:var(--gap);}
+  .cell{width:var(--cell); height:var(--cell); display:flex; align-items:center; justify-content:center; position:relative; border-radius:6px;}
+  .cell.empty{background:rgba(255,255,255,0.02);}
+  .dot{width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:800; box-shadow:0 2px 6px rgba(0,0,0,0.6);}
+  .dot.banker{background:linear-gradient(#ff6b6b,#c93a3a); color:#fff; border:2px solid rgba(255,255,255,0.06);}
+  .dot.player{background:linear-gradient(#5ea6ff,#2663f0); color:#fff; border:2px solid rgba(255,255,255,0.06);}
+  .tie-mark{position:absolute; width:10px; height:10px; background:#13d47d; border-radius:50%; right:6px; top:6px; box-shadow:0 1px 2px rgba(0,0,0,0.4);}
+  .history{margin-top:10px; font-size:13px; color:#d6d6d6; display:flex; flex-wrap:wrap; gap:6px;}
+  .history .token{display:inline-block; padding:4px 8px; border-radius:6px; font-weight:700;}
+  .token.M{background:#320606; color:#ffbaba;}
+  .token.W{background:#0a2340; color:#cfe2ff;}
+  .token.D{background:#072615; color:#bfffdc;}
+  input[type="text"]{padding:8px;border-radius:6px;border:1px solid #333;background:#0b0b0b;color:#fff;min-width:320px;}
+  .small{font-size:13px;color:#bfbfbf;}
+  @media (max-width:700px){ :root{--cell:36px;} input[type="text"]{min-width:160px;} }
+</style>
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="controls">
+      <button id="btnB" class="btn btn-b">M</button>
+      <button id="btnP" class="btn btn-p">W</button>
+      <button id="btnT" class="btn btn-t">D</button>
+      <button id="btnClear" class="btn btn-clear">Clean</button>
+      <button id="btnUndo" class="btn btn-clear">Undo</button>
+    </div>
+
+    <div style="display:flex;gap:8px;align-items:center;margin-left:12px;">
+      <input id="pasteSeq" type="text" placeholder="Paste or input sequence: like WWMWMMDWMMDW...">
+      <button id="btnLoad" class="btn btn-clear">Load and execute</button>
+    </div>
+
+    <div style="margin-left:auto" class="controls-right">
+      <div class="small">Rule: Once right-turn (pendingOrigin set), **subsequent same color always go right, not down** before encountering different color (D doesn't count). When encountering different color, prioritize returning to origin's next row (origin.r+1).</div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div id="board" class="board" aria-hidden="false"></div>
+    <div class="history" id="history"></div>
+  </div>
+
+<script>
+(function(){
+  const ROWS = 6, COLS = 120;
+  const grid = Array.from({length: COLS}, ()=> Array.from({length: ROWS}, ()=>null));
+  let lastVal = null, lastPos = null, pendingOrigin = null;
+  let history = [], snapshots = [];
+
+  function isEmpty(c,r){ return c>=0 && c<COLS && r>=0 && r<ROWS && grid[c][r]===null; }
+  function findFirstEmptyRowInCol(c, start=0){ if(c<0||c>=COLS) return null; for(let r=start;r<ROWS;r++) if(grid[c][r]===null) return r; return null; }
+  function placeAt(c,r,val){ if(c<0||c>=COLS||r<0||r>=ROWS) return null; grid[c][r]={val,val,tie:false}; lastVal=val; lastPos={c,r}; return {c,r}; }
+  function markTieOnLast(){ if(lastPos){ const {c,r}=lastPos; if(grid[c] && grid[c][r]) grid[c][r].tie=true; } }
+  function pushSnapshot(added, prevLastVal, prevLastPos, prevPending){ snapshots.push({added:added.slice(), prevLastVal, prevLastPos:prevLastPos?{...prevLastPos}:null, prevPending:prevPending?{...prevPending}:null, prevHistoryLen: history.length}); }
+  function undoOnce(){ if(snapshots.length===0) return; const s=snapshots.pop(); for(const a of s.added) grid[a.c][a.r]=null; lastVal=s.prevLastVal; lastPos=s.prevLastPos; pendingOrigin=s.prevPending; history.splice(s.prevHistoryLen); render(); }
+
+  function step(token){
+    token = (''+token).toUpperCase();
+    // Backward compatible mapping: B->M, P->W, T->D
+    token = ({B:'M', P:'W', T:'D'}[token] || token);
+    if(!['M','W','D'].includes(token)) return;
+    const added=[]; const prevLastVal=lastVal, prevLastPos = lastPos?{...lastPos}:null, prevPending = pendingOrigin?{...pendingOrigin}:null;
+
+    if(token==='D'){ markTieOnLast(); history.push({type:'D'}); pushSnapshot(added, prevLastVal, prevLastPos, prevPending); render(); return; }
+    const val = token;
+
+    if(lastVal===null){
+      const p=placeAt(0,0,val); if(p) added.push(p); history.push({type:val}); pushSnapshot(added, prevLastVal, prevLastPos, prevPending); render(); return;
+    }
+
+    // CASE: same color as last
+    if(val === lastVal){
+      // If pendingOrigin exists -> right-mode: ALWAYS go right (do NOT try down)
+      if(pendingOrigin){
+        // place to the right of lastPos: prefer same row, else first empty in that column
+        let tryC = lastPos.c + 1;
+        let placed = false;
+        while(tryC < COLS){
+          if(isEmpty(tryC, lastPos.r)){
+            const p = placeAt(tryC, lastPos.r, val); if(p) added.push(p); placed = true; break;
+          }
+          const fe = findFirstEmptyRowInCol(tryC, 0);
+          if(fe !== null){
+            const p = placeAt(tryC, fe, val); if(p) added.push(p); placed = true; break;
+          }
+          tryC++;
+        }
+        if(!placed){
+          const p = placeAt(COLS-1, 0, val); if(p) added.push(p);
+        }
+        history.push({type:val, note:'right-mode-rightward'});
+        pushSnapshot(added, prevLastVal, prevLastPos, prevPending);
+        render(); return;
+      } else {
+        // no pending => normal behavior: try down, else right-turn
+        const c0 = lastPos.c, r0 = lastPos.r, rBelow = r0+1;
+        if(rBelow < ROWS && isEmpty(c0, rBelow)){
+          const p=placeAt(c0, rBelow, val); if(p) added.push(p); history.push({type:val}); pushSnapshot(added, prevLastVal, prevLastPos, prevPending); render(); return;
+        } else {
+          // right-turn: set pendingOrigin only if none exists (preserve earliest)
+          if(pendingOrigin === null) pendingOrigin = { c:c0, r:r0 };
+          // place rightwards (prefer same row)
+          let placed=false, tryC=c0+1;
+          while(tryC < COLS){
+            if(isEmpty(tryC, r0)){ const p=placeAt(tryC, r0, val); if(p) added.push(p); placed=true; break; }
+            const fe=findFirstEmptyRowInCol(tryC,0);
+            if(fe !== null){ const p=placeAt(tryC, fe, val); if(p) added.push(p); placed=true; break; }
+            tryC++;
+          }
+          if(!placed){ const p=placeAt(COLS-1, 0, val); if(p) added.push(p); }
+          history.push({type:val, note:'right-turn'});
+          pushSnapshot(added, prevLastVal, prevLastPos, prevPending);
+          render(); return;
+        }
+      }
+    } // end same-color
+
+    // CASE: different color
+    if(pendingOrigin){
+      const oc = pendingOrigin.c, orow = pendingOrigin.r;
+      let placed=false;
+      const startR = orow + 1;
+      if(startR < ROWS){
+        for(let r = startR; r < ROWS; r++){
+          if(isEmpty(oc, r)){ const p = placeAt(oc, r, val); if(p) added.push(p); placed=true; break; }
+        }
+      } else {
+        // origin下一列超底 -> 回補到 origin.c+1 從 top-first-empty
+        let tryc = oc + 1;
+        while(tryc < COLS){
+          const fe = findFirstEmptyRowInCol(tryc, 0);
+          if(fe !== null){ const p=placeAt(tryc, fe, val); if(p) added.push(p); placed=true; break; }
+          tryc++;
+        }
+      }
+      if(!placed){
+        // 若 origin 欄從 startR..ROWS-1 全滿，則嘗試從 origin.c+1 往右找 top-first-empty
+        let tryc = oc + 1;
+        while(tryc < COLS){
+          const fe = findFirstEmptyRowInCol(tryc, 0);
+          if(fe !== null){ const p=placeAt(tryc, fe, val); if(p) added.push(p); placed=true; break; }
+          tryc++;
+        }
+      }
+      if(!placed){
+        // 最後 fallback
+        let newC = lastPos.c + 1;
+        let found=false;
+        while(newC < COLS){
+          const rr = findFirstEmptyRowInCol(newC, 0);
+          if(rr !== null){ const p=placeAt(newC, rr, val); if(p) added.push(p); found=true; break; }
+          newC++;
+        }
+        if(!found){ const p=placeAt(COLS-1, 0, val); if(p) added.push(p); }
+      }
+      // consume pendingOrigin
+      pendingOrigin = null;
+      history.push({type:val, note:'return-to-origin'});
+      pushSnapshot(added, prevLastVal, prevLastPos, prevPending);
+      render(); return;
+    } else {
+      // no pending -> normal next-col top-first-empty
+      let newC = lastPos.c + 1; let found=false;
+      while(newC < COLS){
+        const rr = findFirstEmptyRowInCol(newC, 0);
+        if(rr !== null){ const p=placeAt(newC, rr, val); if(p) added.push(p); found=true; break; }
+        newC++;
+      }
+      if(!found){ const p=placeAt(COLS-1, 0, val); if(p) added.push(p); }
+      history.push({type:val});
+      pushSnapshot(added, prevLastVal, prevLastPos, prevPending);
+      render(); return;
+    }
+  } // end step
+
+  // render
+  const boardEl = document.getElementById('board'), histEl = document.getElementById('history');
+  function render(){
+    boardEl.innerHTML = '';
+    for(let c=0;c<COLS;c++){
+      const colEl = document.createElement('div'); colEl.className='col';
+      for(let r=0;r<ROWS;r++){
+        const cellEl = document.createElement('div'); cellEl.className='cell';
+        const cell = grid[c][r];
+        if(cell===null){ cellEl.classList.add('empty'); }
+        else {
+          const dot = document.createElement('div'); dot.className='dot ' + (cell.val==='M' ? 'banker' : 'player');
+          dot.textContent = cell.val; cellEl.appendChild(dot);
+          if(cell.tie){ const tm=document.createElement('div'); tm.className='tie-mark'; cellEl.appendChild(tm); }
+        }
+        colEl.appendChild(cellEl);
+      }
+      boardEl.appendChild(colEl);
+    }
+    histEl.innerHTML = '';
+    history.forEach(it=>{ const sp = document.createElement('span'); sp.className='token ' + it.type; sp.textContent = it.type + (it.note ? '·' : ''); if(it.note) sp.title = it.note; histEl.appendChild(sp); });
+    const infoEl = document.querySelector('.small');
+    if(pendingOrigin) infoEl.textContent = `Pending origin = c=${pendingOrigin.c}, r=${pendingOrigin.r}`; else infoEl.textContent = `No pending origin`;
+  }
+
+  // ui wiring
+  document.getElementById('btnB').addEventListener('click', ()=> step('M'));
+  document.getElementById('btnP').addEventListener('click', ()=> step('W'));
+  document.getElementById('btnT').addEventListener('click', ()=> step('D'));
+  document.getElementById('btnClear').addEventListener('click', ()=>{ for(let c=0;c<COLS;c++) for(let r=0;r<ROWS;r++) grid[c][r]=null; lastVal=null; lastPos=null; pendingOrigin=null; history=[]; snapshots=[]; render(); });
+  document.getElementById('btnUndo').addEventListener('click', ()=> undoOnce());
+  document.getElementById('btnLoad').addEventListener('click', ()=>{
+    const s = (document.getElementById('pasteSeq').value || '');
+    // Accept both "MMMW..." and legacy "BBBP..." styles
+    const toks = s.toUpperCase().replace(/[BPT]/g, ch => ({B:'M', P:'W', T:'D'}[ch])).replace(/[^MWD]/g,'').split('');
+    document.getElementById('btnClear').click();
+    for(const t of toks) step(t);
+  });
+
+  // expose for debug
+  window._bigroad_rightmode = { grid, step, render };
+
+  render();
+})();
+</script>
+</body>
+</html>

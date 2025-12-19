@@ -6,6 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="screen-orientation" content="any" />
     <meta name="mobile-web-app-capable" content="yes" />
+    <!-- iOS specific meta tags for video playback -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Casino Game Interface</title>
     <style>
       body {
@@ -29,10 +32,13 @@
         -webkit-overflow-scrolling: touch;
       }
     </style>
+    <!-- VePlayer CDN - Match original site exactly (version 2.9.0, no separate plugins) -->
+    <link rel="stylesheet" 
+          href="https://sf-unpkg.bytepluscdn.com/obj/byteplusfe-sg/sdk/@byteplus/veplayer/2.9.0/umd/veplayer.production.css">
+    <script src="https://sf-unpkg.bytepluscdn.com/obj/byteplusfe-sg/sdk/@byteplus/veplayer/2.9.0/umd/veplayer.production.js"></script>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <script src="path/to/veplayer.min.js"></script>
   </body>
 </html>

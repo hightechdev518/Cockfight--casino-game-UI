@@ -26,18 +26,12 @@ export const shouldThrottle = (key: string, minInterval: number): boolean => {
   
   // If there's a pending call, throttle
   if (entry.pending) {
-    if (import.meta.env.DEV) {
-      console.debug(`⏸️ Throttled ${key}: pending call in progress`)
-    }
     return false
   }
   
   // If enough time hasn't passed, throttle
   const timeSinceLastCall = now - entry.lastCall
   if (timeSinceLastCall < minInterval) {
-    if (import.meta.env.DEV) {
-      console.debug(`⏸️ Throttled ${key}: ${timeSinceLastCall}ms < ${minInterval}ms`)
-    }
     return false
   }
   

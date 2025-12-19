@@ -9,7 +9,16 @@ import { useWebSocket } from './hooks/useWebSocket'
 import { apiService, sessionManager } from './services/apiService'
 import { getInitParams, setUrlParam } from './utils/urlParams'
 import { shouldThrottle, completeThrottle } from './utils/apiThrottle'
+import { setLanguage, isValidLanguageCode, type LanguageCode } from './utils/language'
 import './App.css'
+
+// Silence all console output in src/ (requested cleanup)
+const console: Pick<Console, 'log' | 'warn' | 'error' | 'debug'> = {
+  log: () => {},
+  warn: () => {},
+  error: () => {},
+  debug: () => {},
+}
 
 function App() {
   const { initializeGame, showGameSummary, setGameSummary, tableId, connectionStatus, sessionExpired, setSessionExpired } = useGameStore()
@@ -19,12 +28,58 @@ function App() {
   // Refs to track initialization state
   const isInitializingRef = useRef<boolean>(true)
   const initializationCompleteRef = useRef<boolean>(false)
+  const sessionSetTimeRef = useRef<number>(0) // Track when session was set
+  const gracePeriodRef = useRef<number>(5000) // 5 second grace period after login
+
+  // Listen for session set events to track when session is established
+  useEffect(() => {
+    const handleSessionSet = (event: any) => {
+      // Only start grace period if this is a new session (not just a refresh)
+      // Check if session ID actually changed
+      const currentSession = sessionManager.getSessionId()
+      const previousSession = localStorage.getItem('previous_session_id')
+      
+      if (currentSession && currentSession !== previousSession) {
+        sessionSetTimeRef.current = event.detail?.timestamp || Date.now()
+        localStorage.setItem('previous_session_id', currentSession)
+        if (import.meta.env.DEV) {
+          console.log('✅ New session set event received, starting grace period')
+        }
+      } else if (import.meta.env.DEV) {
+        console.log('✅ Session set event received but session unchanged (refresh)')
+      }
+    }
+
+    window.addEventListener('session_set', handleSessionSet as EventListener)
+    
+    return () => {
+      window.removeEventListener('session_set', handleSessionSet as EventListener)
+    }
+  }, [])
 
   // Listen for session expired events (B232 error)
   useEffect(() => {
-    const handleSessionExpired = () => {
+    const handleSessionExpired = (event: any) => {
+      // Check if we're within grace period after session was set
+      const timeSinceSessionSet = Date.now() - sessionSetTimeRef.current
+      const isWithinGracePeriod = timeSinceSessionSet < gracePeriodRef.current
+      
+      if (isWithinGracePeriod) {
       if (import.meta.env.DEV) {
-        console.error('❌ Session expired event received')
+          console.warn('⚠️ B232 error received but ignoring (within grace period after login):', {
+            timeSinceSessionSet,
+            gracePeriod: gracePeriodRef.current,
+            detail: event.detail
+          })
+        }
+        return // Ignore B232 errors during grace period
+      }
+      
+      if (import.meta.env.DEV) {
+        console.error('❌ Session expired event received (after grace period):', {
+          timeSinceSessionSet,
+          detail: event.detail
+        })
       }
       setSessionExpired(true)
     }
@@ -45,13 +100,20 @@ function App() {
     
   }
 
-  useEffect(() => {
+  // Extract initialization logic into a reusable function
+  const initializeApp = async () => {
     // Get initialization parameters from URL
-    const { sess_id, language, tableid } = getInitParams()
+    const { sess_id, language, tableid, uniqueid } = getInitParams()
     
-    // Store language preference if provided
-    if (language) {
-      localStorage.setItem('app_language', language)
+    // Store language preference if provided and trigger language change event
+    // This ensures UI updates immediately without requiring page refresh
+    if (language && isValidLanguageCode(language)) {
+      setLanguage(language as LanguageCode)
+    }
+    
+    // Store uniqueid if provided (from URL or localStorage)
+    if (uniqueid) {
+      localStorage.setItem('last_uniqueid', uniqueid)
     }
 
     // Initialize with URL parameters or defaults
@@ -61,7 +123,18 @@ function App() {
         
         // If sess_id is in URL, use it
         if (sessionId) {
+          const existingSession = sessionManager.getSessionId()
+          const isNewSession = existingSession !== sessionId
           sessionManager.setSessionId(sessionId)
+          // Track when session was set for grace period (only for new sessions)
+          if (isNewSession) {
+            sessionSetTimeRef.current = Date.now()
+            if (import.meta.env.DEV) {
+              console.log('✅ New session ID set from URL, starting grace period')
+            }
+          } else if (import.meta.env.DEV) {
+            console.log('✅ Session ID from URL matches existing session')
+          }
         } else {
           // If no sess_id in URL, use default test session
           // This is for development/testing purposes
@@ -240,6 +313,8 @@ function App() {
                   // Based on original site structure: data is an array, each item has tableid and trid
                   let foundRoundId: string | number | null = null
                   let foundCurrentRound: string | number | null = null
+                  let foundOddsRNo: string | number | null = null
+                  const lobbyMap: Record<string, any> = {}
                   
                   // Check if data is an array (original site format)
                   if (Array.isArray(data)) {
@@ -252,6 +327,11 @@ function App() {
                       // Use server's tableId (CF01, CF02, etc.) - normalize to uppercase for comparison
                       const serverTableId = itemTableId ? itemTableId.toUpperCase() : null
                       const currentTableIdUpper = tableId ? tableId.toUpperCase() : null
+                      
+                      // Build global lobby map for all tables
+                      if (serverTableId) {
+                        lobbyMap[serverTableId] = item
+                      }
                       
                       if (serverTableId && (serverTableId === currentTableIdUpper || itemTableId === tableId || itemTableId === tableId.toUpperCase() || itemTableId === tableId.toLowerCase())) {
                         // Found matching table - update tableId from server to ensure it matches server format
@@ -271,6 +351,13 @@ function App() {
                           foundRoundId = item.trid
                           if (import.meta.env.DEV) {
                             console.log('✅ Found roundId (trid) in array item:', foundRoundId)
+                          }
+                        }
+                        // Extract odds r_no from lobbyinfo "no" (per-table)
+                        if (item.no !== undefined && item.no !== null) {
+                          foundOddsRNo = item.no
+                          if (import.meta.env.DEV) {
+                            console.log('✅ Found odds r_no (no) in array item:', foundOddsRNo)
                           }
                         }
                         // Extract currentRound from r_info.cf_roundno
@@ -309,6 +396,12 @@ function App() {
                         } else if (import.meta.env.DEV && item.roundstatus !== undefined) {
                           console.log('📋 Round status from API ignored (WebSocket is source of truth):', item.roundstatus, 'Current WebSocket status:', currentRoundStatus)
                         }
+
+                        // Store raw tablestatus from API when available so UI can show full table status
+                        if (item.tablestatus !== undefined && updateData.roundStatus === undefined) {
+                          // Only set if WebSocket hasn't already provided a tableStatus/roundStatus snapshot
+                          ;(updateData as any).tableStatus = item.tablestatus
+                        }
                         break
                       }
                     }
@@ -317,18 +410,41 @@ function App() {
                     if (tableId && data[tableId]) {
                       const tableData = data[tableId]
                       foundRoundId = tableData.trid || tableData.r_id || tableData.roundId
+                      foundOddsRNo = tableData.no ?? tableData.r_no ?? foundOddsRNo
                       if (tableData.r_info && tableData.r_info.cf_roundno) {
                         foundCurrentRound = tableData.r_info.cf_roundno
                       }
+                    }
+                    
+                    // Attempt to build global lobby map from object data
+                    if (typeof data === 'object' && data !== null) {
+                      Object.keys(data).forEach((k) => {
+                        const v = (data as any)[k]
+                        if (v && typeof v === 'object') {
+                          const possibleTableId = (v.tableid || v.tableId || v.t_id || k)
+                          const normalized = possibleTableId ? String(possibleTableId).toUpperCase() : null
+                          if (normalized && normalized.startsWith('CF')) {
+                            lobbyMap[normalized] = v
+                          }
+                        }
+                      })
                     }
                     
                     // Fallback: Check root level
                     if (!foundRoundId) {
                       foundRoundId = data.trid || data.roundId || data.r_id
                     }
+                    if (!foundOddsRNo) {
+                      foundOddsRNo = data.no ?? data.r_no ?? null
+                    }
                     if (!foundCurrentRound) {
                       foundCurrentRound = data.currentRound || data.r_no
                     }
+                  }
+
+                  // Store lobbyinfo global map if we have one
+                  if (Object.keys(lobbyMap).length > 0) {
+                    updateData.lobbyInfoByTableId = lobbyMap
                   }
                   
                   if (foundRoundId) {
@@ -358,6 +474,18 @@ function App() {
                       console.log('✅ Setting currentRound:', updateData.currentRound)
                     }
                   }
+
+                  // Ensure selected table has r_no in global map; odds.php must use it (no fallback)
+                  if (foundOddsRNo !== null && foundOddsRNo !== undefined && tableId) {
+                    const key = tableId.toUpperCase()
+                    updateData.lobbyInfoByTableId = {
+                      ...(updateData.lobbyInfoByTableId || useGameStore.getState().lobbyInfoByTableId || {}),
+                      [key]: {
+                        ...(useGameStore.getState().lobbyInfoByTableId?.[key] || {}),
+                        no: foundOddsRNo,
+                      },
+                    }
+                  }
                   
                   if (Object.keys(updateData).length > 0) {
                     initializeGame(updateData)
@@ -369,10 +497,13 @@ function App() {
                   // If we have currentRound but no roundId, try to fetch roundId from odds API
                   if (updateData.currentRound && !updateData.roundId) {
                     if (import.meta.env.DEV) {
-                      console.log('📊 Attempting to fetch roundId from odds API using r_no:', updateData.currentRound)
+                      console.log('📊 Attempting to fetch roundId from odds API using r_no (from lobbyinfo no):', foundOddsRNo)
                     }
                     try {
-                      const oddsResponse = await apiService.getOdds(updateData.currentRound.toString())
+                      if (!foundOddsRNo) {
+                        throw new Error('Missing lobbyinfo no (r_no) - no fallback')
+                      }
+                      const oddsResponse = await apiService.getOdds(foundOddsRNo.toString())
                       if (import.meta.env.DEV) {
                         console.log('📊 Odds API response:', oddsResponse)
                       }
@@ -483,7 +614,7 @@ function App() {
       }
     }
 
-    init().catch((error) => {
+    await init().catch((error) => {
       // Initialize with minimal defaults on error
       // API data will be fetched when available (WebSocket, retry, etc.)
       if (import.meta.env.DEV) {
@@ -505,7 +636,12 @@ function App() {
     } catch (error) {
       // WebSocket not available
     }
+  }
 
+  // Initial mount initialization
+  useEffect(() => {
+    initializeApp()
+    
     return () => {
       try {
         disconnect()
@@ -515,6 +651,82 @@ function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Listen for URL parameter changes and re-initialize when they change
+  useEffect(() => {
+    const handleInitParamChange = async (event: any) => {
+      const { param, newValue, allParams } = event.detail || {}
+      
+      if (import.meta.env.DEV) {
+        console.log('🔄 URL parameter changed, re-initializing:', { param, newValue, allParams })
+      }
+      
+      // Disconnect WebSocket before re-initializing
+      try {
+        disconnect()
+      } catch (error) {
+        // Ignore disconnect errors
+      }
+      
+      // Reset initialization flags to allow re-initialization
+      isInitializingRef.current = true
+      initializationCompleteRef.current = false
+      
+      // Re-initialize the app with new parameters
+      try {
+        await initializeApp()
+        isInitializingRef.current = false
+        initializationCompleteRef.current = true
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error('❌ Re-initialization failed:', error)
+        }
+        isInitializingRef.current = false
+        initializationCompleteRef.current = true
+      }
+    }
+
+    const handlePopState = async () => {
+      // Browser back/forward navigation - URL changed
+      if (import.meta.env.DEV) {
+        console.log('🔄 Browser navigation detected, re-initializing')
+      }
+      
+      // Disconnect WebSocket before re-initializing
+      try {
+        disconnect()
+      } catch (error) {
+        // Ignore disconnect errors
+      }
+      
+      // Reset initialization flags
+      isInitializingRef.current = true
+      initializationCompleteRef.current = false
+      
+      // Re-initialize the app
+      try {
+        await initializeApp()
+        isInitializingRef.current = false
+        initializationCompleteRef.current = true
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.error('❌ Re-initialization failed:', error)
+        }
+        isInitializingRef.current = false
+        initializationCompleteRef.current = true
+      }
+    }
+
+    // Listen for custom initparamchange events (from setUrlParam/setInitParams)
+    window.addEventListener('initparamchange', handleInitParamChange)
+    // Listen for browser back/forward navigation
+    window.addEventListener('popstate', handlePopState)
+    
+    return () => {
+      window.removeEventListener('initparamchange', handleInitParamChange)
+      window.removeEventListener('popstate', handlePopState)
+    }
+  }, [disconnect])
 
   // Refresh data when table changes - CRITICAL: This must run immediately when tableId changes
   const prevTableIdRef = useRef<string | undefined>(undefined)
@@ -538,202 +750,76 @@ function App() {
         console.log('🔄 Refreshing data for table:', tableId)
       }
       try {
-        // Get lobby info for the new table
         if (sessionManager.getSessionId()) {
-          const lobbyInfo = await apiService.getLobbyInfo()
-          if (import.meta.env.DEV) {
-            console.log('📋 Refresh: LobbyInfo response:', lobbyInfo)
-          }
-          if (lobbyInfo && lobbyInfo.code === 'B100' && lobbyInfo.data) {
-            const updateData: Partial<Parameters<typeof initializeGame>[0]> = {}
-            
-            if (typeof lobbyInfo.data === 'object') {
-              const data = lobbyInfo.data as any
-              
-              // Check if data is an array (original site format: array of table objects)
-              if (Array.isArray(data)) {
-                if (import.meta.env.DEV) {
-                  console.log('📋 Refresh: LobbyInfo data is an array, searching for table:', tableId)
-                }
-                // Search for matching table in array
-                for (const item of data) {
-                  const itemTableId = item.tableid || item.tableId || item.t_id
-                  const normalizedItemTableId = itemTableId ? itemTableId.toUpperCase() : null
-                  const normalizedTableId = tableId ? tableId.toUpperCase() : null
-                  if (normalizedItemTableId && (normalizedItemTableId === normalizedTableId || 
-                      itemTableId === tableId || 
-                      itemTableId === tableId.toUpperCase() || 
-                      itemTableId === tableId.toLowerCase())) {
-                    // Found matching table - extract trid as roundId
-                    if (item.trid) {
-                      updateData.roundId = item.trid.toString()
-                      if (import.meta.env.DEV) {
-                        console.log('✅ Refresh: Found roundId (trid) in array item:', updateData.roundId)
-                      }
+          // IMPORTANT: odds.php requires r_no; we source it from lobbyinfo.php per-table "no"
+          // Keep this call lightweight and throttled; WebSocket remains the source of truth for realtime state.
+          const lobbyInfoKey = `lobbyinfo_tablechange_${tableId}`
+          if (shouldThrottle(lobbyInfoKey, 2000)) {
+            try {
+              const lobbyInfo = await apiService.getLobbyInfo()
+              completeThrottle(lobbyInfoKey)
+              if (lobbyInfo && lobbyInfo.code === 'B100' && lobbyInfo.data) {
+                const data: any = lobbyInfo.data
+                let foundOddsRNo: string | number | null = null
+                let foundRoundId: string | number | null = null
+                let foundCurrentRound: string | number | null = null
+
+                if (Array.isArray(data)) {
+                  const currentTableIdUpper = tableId ? tableId.toUpperCase() : null
+                  for (const item of data) {
+                    const itemTableId = item.tableid || item.tableId || item.t_id
+                    const serverTableId = itemTableId ? itemTableId.toUpperCase() : null
+                    if (serverTableId && currentTableIdUpper && serverTableId === currentTableIdUpper) {
+                      if (item.no !== undefined && item.no !== null) foundOddsRNo = item.no
+                      if (item.trid) foundRoundId = item.trid
+                      if (item.r_info?.cf_roundno) foundCurrentRound = item.r_info.cf_roundno
+                      break
                     }
-                    // Extract currentRound from r_info.cf_roundno
-                    if (item.r_info && item.r_info.cf_roundno) {
-                      updateData.currentRound = parseInt(item.r_info.cf_roundno, 10)
-                      if (import.meta.env.DEV) {
-                        console.log('✅ Refresh: Found currentRound (cf_roundno) in array item:', updateData.currentRound)
-                      }
-                    }
-                    // Check roundstatus to determine if betting is allowed
-                    // CRITICAL: When table changes, we MUST update roundStatus from API immediately
-                    // WebSocket might still be sending data for the old table, so we override it
-                    if (item.roundstatus !== undefined) {
-                      // Always update roundStatus when table changes (tableId changed)
-                      // This ensures betting area reflects the new table's status immediately
-                      updateData.roundStatus = item.roundstatus
-                      if (import.meta.env.DEV) {
-                        console.log('📋 Refresh: Round status from API for new table:', item.roundstatus, item.roundstatus === 1 ? '(Betting Open)' : item.roundstatus === 2 ? '(Betting Closed/Fighting)' : '(Settled)')
-                      }
-                      
-                      // If betting is open (roundStatus === 1), extract countdown from API
-                      // This ensures timer appears immediately when switching tables
-                      if (item.roundstatus === 1) {
-                        // Check for countdown in various possible field names
-                        if (item.countdown !== undefined && item.countdown > 0) {
-                          updateData.countdown = item.countdown
-                          if (import.meta.env.DEV) {
-                            console.log('✅ Refresh: Found countdown from API (betting open):', item.countdown)
-                          }
-                        } else if (item.bettime !== undefined && item.bettime > 0) {
-                          updateData.countdown = item.bettime
-                          if (import.meta.env.DEV) {
-                            console.log('✅ Refresh: Found bettime from API (betting open):', item.bettime)
-                          }
-                        }
-                      }
-                    }
-                    break
+                  }
+                } else if (typeof data === 'object' && data !== null) {
+                  const tableData = (tableId && data[tableId]) ? data[tableId] : null
+                  if (tableData) {
+                    foundOddsRNo = tableData.no ?? tableData.r_no ?? null
+                    foundRoundId = tableData.trid || tableData.r_id || tableData.roundId || null
+                    foundCurrentRound = tableData.r_info?.cf_roundno || tableData.currentRound || tableData.r_no || null
+                  } else {
+                    foundOddsRNo = data.no ?? data.r_no ?? null
+                    foundRoundId = data.trid || data.roundId || data.r_id || null
+                    foundCurrentRound = data.currentRound || data.r_no || null
                   }
                 }
-              } else {
-                // Check if there's table-specific data
-                if (data[tableId]) {
-                  const tableData = data[tableId]
-                  if (tableData.trid || tableData.r_id || tableData.roundId) {
-                    updateData.roundId = (tableData.trid || tableData.r_id || tableData.roundId).toString()
-                    if (import.meta.env.DEV) {
-                      console.log('✅ Refresh: Found roundId in table-specific data:', updateData.roundId)
-                    }
-                  }
-                  if (tableData.r_no || tableData.rno) {
-                    const r_no = tableData.r_no || tableData.rno
-                    updateData.currentRound = typeof r_no === 'number' ? r_no : parseInt(r_no, 10)
-                  }
-                  // Extract countdown if betting is open
-                  if (tableData.roundstatus === 1) {
-                    if (tableData.countdown !== undefined && tableData.countdown > 0) {
-                      updateData.countdown = tableData.countdown
-                    } else if (tableData.bettime !== undefined && tableData.bettime > 0) {
-                      updateData.countdown = tableData.bettime
-                    }
-                  }
-                } else {
-                  // Fallback to general data
-                  if (data.trid || data.roundId || data.r_id) {
-                    updateData.roundId = (data.trid || data.roundId || data.r_id).toString()
-                    if (import.meta.env.DEV) {
-                      console.log('✅ Refresh: Found roundId in root data:', updateData.roundId)
-                    }
-                  }
-                  if (data.currentRound || data.r_no || data.rno) {
-                    const r_no = data.currentRound || data.r_no || data.rno
-                    updateData.currentRound = typeof r_no === 'number' ? r_no : parseInt(r_no, 10)
-                  }
-                  // Extract countdown if betting is open
-                  if (data.roundstatus === 1) {
-                    if (data.countdown !== undefined && data.countdown > 0) {
-                      updateData.countdown = data.countdown
-                    } else if (data.bettime !== undefined && data.bettime > 0) {
-                      updateData.countdown = data.bettime
-                    }
+
+                const updateData: any = {}
+                // Update global lobbyinfo cache (per-table) so other modules can read r_no etc.
+                if (foundOddsRNo !== null && foundOddsRNo !== undefined) {
+                  const key = tableId.toUpperCase()
+                  updateData.lobbyInfoByTableId = {
+                    ...(useGameStore.getState().lobbyInfoByTableId || {}),
+                    [key]: {
+                      ...(useGameStore.getState().lobbyInfoByTableId?.[key] || {}),
+                      no: foundOddsRNo,
+                    },
                   }
                 }
+                if (foundRoundId) updateData.roundId = foundRoundId.toString()
+                if (foundCurrentRound) updateData.currentRound = typeof foundCurrentRound === 'number' ? foundCurrentRound : parseInt(foundCurrentRound.toString(), 10)
+                if (Object.keys(updateData).length > 0) initializeGame(updateData)
               }
-              
-              // If we have currentRound but no roundId, try to fetch roundId from odds API
-              if (updateData.currentRound && !updateData.roundId) {
-                if (import.meta.env.DEV) {
-                  console.log('📊 Refresh: Attempting to fetch roundId from odds API using r_no:', updateData.currentRound)
-                }
-                try {
-                  const oddsResponse = await apiService.getOdds(updateData.currentRound.toString())
-                  if (oddsResponse && oddsResponse.code === 'B100' && oddsResponse.data) {
-                    const oddsData = oddsResponse.data
-                    if (Array.isArray(oddsData) && oddsData.length > 0) {
-                      const firstOdd = oddsData[0] as any
-                      if (firstOdd.r_id) {
-                        updateData.roundId = firstOdd.r_id.toString()
-                        if (import.meta.env.DEV) {
-                          console.log('✅ Refresh: Fetched roundId from odds API:', firstOdd.r_id)
-                        }
-                      }
-                    }
-                  }
-                } catch (error) {
-                  if (import.meta.env.DEV) {
-                    console.warn('⚠️ Refresh: Could not fetch roundId from odds API:', error)
-                  }
-                }
-              }
-              
-              // If still no roundId, try public history as last resort
-              if (!updateData.roundId && tableId) {
-                if (import.meta.env.DEV) {
-                  console.log('📊 Refresh: Attempting to fetch roundId from public history as last resort')
-                }
-                try {
-                  const publicHistory = await apiService.getPublicHistory(tableId)
-                  if (publicHistory && publicHistory.data) {
-                    const historyData = publicHistory.data
-                    if (historyData.drawresult && historyData.drawresult[tableId]) {
-                      const drawResults = historyData.drawresult[tableId]
-                      if (Array.isArray(drawResults) && drawResults.length > 0) {
-                        const latestRound = drawResults[0]
-                        if (latestRound.r_id) {
-                          updateData.roundId = latestRound.r_id.toString()
-                          if (import.meta.env.DEV) {
-                            console.log('✅ Refresh: Fetched roundId from public history:', latestRound.r_id)
-                          }
-                        }
-                      }
-                    }
-                  }
-                } catch (error) {
-                  if (import.meta.env.DEV) {
-                    console.warn('⚠️ Refresh: Could not fetch roundId from public history:', error)
-                  }
-                }
-              }
-              
-              // Also fetch balance for the new table
-              try {
-                const balance = await apiService.getBalance()
-                updateData.accountBalance = balance
-                if (import.meta.env.DEV) {
-                  console.log('✅ Refresh: Fetched balance for new table:', balance)
-                }
-              } catch (error) {
-                if (import.meta.env.DEV) {
-                  console.warn('⚠️ Refresh: Could not fetch balance:', error)
-                }
-              }
-              
-              if (Object.keys(updateData).length > 0) {
-                initializeGame(updateData)
-                
-                // Trigger video URL refresh
-                if (typeof window !== 'undefined') {
-                  window.dispatchEvent(new CustomEvent('video_url_refresh', {
-                    detail: { tableId }
-                  }))
-                }
-              }
+            } catch {
+              completeThrottle(lobbyInfoKey)
             }
           }
+
+          // Still trigger video URL refresh when table switches
+          if (typeof window !== 'undefined') {
+            if (import.meta.env.DEV) {
+              console.log('📺 Dispatching video_url_refresh event for table:', tableId)
+            }
+            window.dispatchEvent(new CustomEvent('video_url_refresh', {
+              detail: { tableId }
+            }))
+          }
+          return
         }
       } catch {
         // Failed to refresh table data
@@ -748,7 +834,7 @@ function App() {
       if (import.meta.env.DEV) {
         console.log('🔄 Setting up polling to fetch roundId')
       }
-      // Poll every 5 seconds until roundId is found
+      // Poll every 10 seconds until roundId is found (reduced frequency)
       const pollInterval = setInterval(() => {
         const { roundId } = useGameStore.getState()
         if (!roundId) {
@@ -762,21 +848,88 @@ function App() {
             console.log('✅ RoundId found, stopping polling')
           }
         }
-      }, 5000)
+      }, 10000) // Increased from 5s to 10s
       
       return () => clearInterval(pollInterval)
     }
   }, [tableId, initializeGame])
 
-  // Set up periodic polling for game state updates (fallback when WebSocket disconnected or as backup)
+  // Session keep-alive: Fetch playerinfo or lobbyinfo every 30 seconds to keep session alive
+  useEffect(() => {
+    if (!sessionManager.getSessionId()) return // Don't poll without session
+    
+    const keepSessionAlive = async () => {
+      // Don't poll during initial loading to prevent duplicate calls
+      if (isInitializingRef.current || !initializationCompleteRef.current) {
+        return
+      }
+      
+      try {
+        // Use playerinfo to keep session alive (lighter than lobbyinfo)
+        const sessionKeepAliveKey = 'session_keepalive'
+        if (shouldThrottle(sessionKeepAliveKey, 30000)) {
+          if (import.meta.env.DEV) {
+            console.log('💓 Session keep-alive: Fetching playerinfo to keep session alive')
+          }
+          
+          try {
+            await apiService.getPlayerInfo()
+            completeThrottle(sessionKeepAliveKey)
+            if (import.meta.env.DEV) {
+              console.log('✅ Session keep-alive: playerinfo fetched successfully')
+            }
+          } catch (error) {
+            completeThrottle(sessionKeepAliveKey)
+            if (import.meta.env.DEV) {
+              console.warn('⚠️ Session keep-alive: playerinfo fetch failed, will retry in 30s:', error)
+            }
+          }
+        }
+      } catch (error) {
+        // Silently fail - will retry on next interval
+        if (import.meta.env.DEV) {
+          console.debug('Session keep-alive error:', error)
+        }
+      }
+    }
+    
+    // Start keep-alive after initialization completes
+    const startKeepAlive = () => {
+      if (initializationCompleteRef.current) {
+        keepSessionAlive() // Initial call
+        return setInterval(keepSessionAlive, 30000) // Every 30 seconds
+      } else {
+        // Wait a bit and try again
+        setTimeout(() => {
+          startKeepAlive()
+        }, 2000)
+        return null
+      }
+    }
+    
+    const keepAliveInterval = startKeepAlive()
+    
+    return () => {
+      if (keepAliveInterval) clearInterval(keepAliveInterval)
+    }
+  }, [])
+  
+  // Set up periodic polling for game state updates (ONLY when WebSocket is disconnected)
+  // When WebSocket is connected, it provides real-time updates, so no polling needed
   useEffect(() => {
     if (!tableId) return
     if (!sessionManager.getSessionId()) return // Don't poll without session
+    if (connectionStatus === 'connected') {
+      // WebSocket is connected - no polling needed, WebSocket provides real-time updates
+      if (import.meta.env.DEV) {
+        console.log('✅ WebSocket connected - skipping periodic polling (using real-time updates)')
+      }
+      return
+    }
     
+    // Only poll when WebSocket is disconnected (as fallback)
     // Poll less frequently to reduce server load
-    // Increased intervals to prevent firewall blocking
-    // WebSocket is primary source, polling is backup
-    const pollInterval = connectionStatus === 'connected' ? 30000 : 20000 // 30s if WS connected, 20s if disconnected
+    const pollInterval = 60000 // 60s when WebSocket disconnected (reduced frequency)
     
     const pollGameState = async () => {
       // Don't poll during initial loading to prevent duplicate calls
@@ -787,65 +940,29 @@ function App() {
         return
       }
       
-      try {
-        // Throttle lobbyinfo calls - minimum 5 seconds between calls
-        const lobbyInfoKey = `lobbyinfo_${tableId}`
-        if (!shouldThrottle(lobbyInfoKey, 5000)) {
-          if (import.meta.env.DEV) {
-            console.debug('⏸️ Throttled lobbyinfo poll')
-          }
-        } else {
-          if (import.meta.env.DEV) {
-            console.log('🔄 Polling game state:', {
-              connectionStatus,
-              tableId,
-              interval: pollInterval / 1000 + 's'
-            })
-          }
-          
-          // Fetch lobby info for round status, roundId, currentRound
-          const lobbyInfo = await apiService.getLobbyInfo()
-          completeThrottle(lobbyInfoKey)
-        if (lobbyInfo && lobbyInfo.code === 'B100' && lobbyInfo.data) {
-          const data = lobbyInfo.data as any
-          const updateData: any = {}
-          
-          // Extract data from array format
-          if (Array.isArray(data)) {
-            for (const item of data) {
-              const itemTableId = item.tableid || item.tableId || item.t_id
-              if (itemTableId && (itemTableId.toUpperCase() === tableId.toUpperCase() || 
-                  itemTableId === tableId || 
-                  itemTableId === tableId.toUpperCase() || 
-                  itemTableId === tableId.toLowerCase())) {
-                if (item.trid) updateData.roundId = item.trid.toString()
-                if (item.r_info?.cf_roundno) {
-                  updateData.currentRound = parseInt(item.r_info.cf_roundno, 10)
-                }
-                // Only update roundStatus if WebSocket hasn't set it (WebSocket is source of truth)
-                const currentRoundStatus = useGameStore.getState().roundStatus
-                if (item.roundstatus !== undefined && (connectionStatus !== 'connected' || currentRoundStatus === undefined)) {
-                  updateData.roundStatus = item.roundstatus
-                }
-                break
-              }
-            }
-          }
-          
-          if (Object.keys(updateData).length > 0) {
-            initializeGame(updateData)
-          }
+      // Skip if WebSocket reconnected
+      if (useGameStore.getState().connectionStatus === 'connected') {
+        if (import.meta.env.DEV) {
+          console.log('✅ WebSocket reconnected - stopping polling')
         }
+        return
+      }
+      
+      try {
+        // Lobbyinfo is only called once during initialization - removed from polling to reduce API calls
+        // WebSocket will provide real-time updates instead
+        if (import.meta.env.DEV) {
+          console.log('⏸️ Skipping lobbyinfo poll - using WebSocket for updates (lobbyinfo only called once during init)')
         }
         
-        // Throttle balance calls - minimum 5 seconds between calls
+        // Throttle balance calls - minimum 60 seconds between calls (reduced frequency)
+        // Only poll balance when WebSocket is disconnected (WebSocket provides balance updates when connected)
         const balanceKey = 'balance_poll'
-        if (!shouldThrottle(balanceKey, 5000)) {
+        if (!shouldThrottle(balanceKey, 60000)) { // Increased from 30s to 60s
           if (import.meta.env.DEV) {
             console.debug('⏸️ Throttled balance poll')
           }
         } else {
-          // Always fetch balance (even if WebSocket connected, as backup)
           try {
             const balance = await apiService.getBalance()
             completeThrottle(balanceKey)

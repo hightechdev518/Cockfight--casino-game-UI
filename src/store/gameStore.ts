@@ -1,11 +1,20 @@
 import { create } from 'zustand'
 
+// Silence all console output in src/ (requested cleanup)
+const console: Pick<Console, 'log' | 'warn' | 'error' | 'debug'> = {
+  log: () => {},
+  warn: () => {},
+  error: () => {},
+  debug: () => {},
+}
+
 // localStorage keys for persistence
 const STORAGE_KEY_BALANCE = 'game_balance'
 const STORAGE_KEY_BETS = 'game_bets'
 const STORAGE_KEY_TOTAL_BET = 'game_total_bet'
 const STORAGE_KEY_ROUND_ID = 'game_round_id' // Track which round the persisted data belongs to
 const STORAGE_KEY_TABLE_ID = 'game_table_id' // Persist tableId across reloads
+const STORAGE_KEY_SELECTED_CHIP = 'game_selected_chip' // Persist selected chip across reloads
 
 export type BetType = 'meron' | 'wala' | 'draw' | 'meronRed' | 'meronBlack' | 'walaRed' | 'walaBlack' | 'meronOdd' | 'meronEven' | 'walaOdd' | 'walaEven'
 
@@ -97,7 +106,9 @@ export interface GameState {
   isLive: boolean
   gameId: string
   tableId: string
+  tableStatus?: number // Table status (tablestatus): 0 = no fight, 1 = betting, 2 = fighting, 3 = settling, 4 = waiting, 5 = canceled
   roundId?: string // Round ID for betting API
+  lobbyInfoByTableId: Record<string, any> // Global cache of lobbyinfo.php per-table data
   bets: Bet[]
   selectedChip: number
   totalBet: number
@@ -184,12 +195,26 @@ const getInitialState = (): GameState => {
     })
   }
   
+  // Load selected chip from localStorage, default to 20 if not found
+  let initialSelectedChip = 20
+  if (typeof window !== 'undefined') {
+    const storedChip = localStorage.getItem(STORAGE_KEY_SELECTED_CHIP)
+    if (storedChip) {
+      const chipValue = parseInt(storedChip, 10)
+      if (!isNaN(chipValue) && chipValue > 0) {
+        initialSelectedChip = chipValue
+      }
+    }
+  }
+  
   return {
     isLive: true,
+    tableStatus: undefined,
     gameId: '', // Will be set from API (playerinfo.php gidlist)
     tableId: initialTableId, // From URL or localStorage, default to CF02
+    lobbyInfoByTableId: {}, // Will be set from lobbyinfo.php
     bets: persisted.bets || [],
-    selectedChip: 20,
+    selectedChip: initialSelectedChip,
     totalBet: persisted.totalBet || 0,
     accountBalance: persisted.balance !== null ? persisted.balance : 0, // Will be fetched from API
     autoSubmit: false,
@@ -390,7 +415,19 @@ export const useGameStore = create<GameStore>((set) => ({
     }
   }),
   
-  setSelectedChip: (amount) => set({ selectedChip: amount }),
+  setSelectedChip: (amount) => {
+    // Save selected chip to localStorage
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(STORAGE_KEY_SELECTED_CHIP, amount.toString())
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.warn('Failed to save selected chip to localStorage:', error)
+        }
+      }
+    }
+    set({ selectedChip: amount })
+  },
   
   setTotalBet: (amount) => set((state) => {
     // Save to localStorage if roundId is available

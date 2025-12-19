@@ -3,7 +3,16 @@ import { apiService, sessionManager } from '../../services/apiService'
 import { useGameStore } from '../../store/gameStore'
 import { setUrlParam } from '../../utils/urlParams'
 import { shouldThrottle, completeThrottle } from '../../utils/apiThrottle'
+import { useI18n } from '../../i18n/LanguageContext'
 import './GameSummary.css'
+
+// Silence all console output in src/ (requested cleanup)
+const console: Pick<Console, 'log' | 'warn' | 'error' | 'debug'> = {
+  log: () => {},
+  warn: () => {},
+  error: () => {},
+  debug: () => {},
+}
 
 interface GameSummaryProps {
   onClose?: () => void
@@ -13,6 +22,7 @@ interface TableInfo {
   id: string
   name: string
   round: number
+  roundIdentifier?: string // Format: roundId[roundNumber from server (e.g., "1268197[118")
   status: string
   openCount?: number
   tableId?: string
@@ -28,6 +38,7 @@ const GameSummary: React.FC<GameSummaryProps> = ({ onClose }) => {
   const [tables, setTables] = useState<TableInfo[]>([])
   const lastFetchTimeRef = useRef(0)
   const { tableId, switchTable, setGameSummary } = useGameStore()
+  const { t } = useI18n()
 
   /**
    * Parses lobby info API response to extract table information
@@ -106,21 +117,106 @@ const GameSummary: React.FC<GameSummaryProps> = ({ onClose }) => {
       const round = table.r_no || table.round || table.r_id || table.round_no || table.r_info?.cf_roundno || 0
       const roundId = table.r_id || table.round_id || table.roundId || table.trid
       
-      // Determine status based on API data
-      let status = 'Betting'
+      // Get tablestatus and enable from server API - USE REAL API FIELD (same as WebSocket)
+      const enable = table.enable
+      const tablestatus = table.tablestatus
+      
+      // Determine status based on API data - USE tablestatus from server (like WebSocket does)
+      // Priority: table.status > table.state > tablestatus (from server) > roundstatus
+      let status = 'Betting' // Default fallback
+      
+      // Priority 1: Use table.status from server (direct status string)
       if (table.status) {
-        status = table.status
-      } else if (table.round_status) {
-        status = table.round_status
-      } else if (table.roundstatus === 1) {
-        status = 'Betting'
-      } else if (table.roundstatus === 2) {
-        status = 'Fighting'
-      } else if (table.roundstatus === 4) {
-        status = 'Settled'
-      } else if (table.state) {
-        status = table.state
-      } else if (table.countdown !== undefined && table.countdown > 0) {
+        status = String(table.status).trim()
+        // Normalize common status values
+        const statusLower = status.toLowerCase()
+        if (statusLower === 'betting' || statusLower === 'open') {
+          status = 'Betting'
+        } else if (statusLower === 'inprogress' || statusLower === 'in progress' || statusLower === 'fighting') {
+          status = 'Fighting'
+        } else if (statusLower === 'waiting' || statusLower === 'wait') {
+          status = 'Waiting'
+        } else if (statusLower === 'settled' || statusLower === 'closed') {
+          status = 'Settled'
+        } else if (statusLower === 'maintenance' || statusLower === 'maintain') {
+          status = 'Maintenance'
+        } else {
+          // Capitalize first letter of each word
+          status = status.split(' ').map(word => 
+            word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+          ).join(' ')
+        }
+      }
+      // Priority 2: Use table.state from server
+      else if (table.state) {
+        status = String(table.state).trim()
+        const statusLower = status.toLowerCase()
+        if (statusLower === 'betting' || statusLower === 'open') {
+          status = 'Betting'
+        } else if (statusLower === 'inprogress' || statusLower === 'in progress' || statusLower === 'fighting') {
+          status = 'Fighting'
+        } else if (statusLower === 'waiting' || statusLower === 'wait') {
+          status = 'Waiting'
+        } else if (statusLower === 'settled' || statusLower === 'closed') {
+          status = 'Settled'
+        } else if (statusLower === 'maintenance' || statusLower === 'maintain') {
+          status = 'Maintenance'
+        } else {
+          status = status.split(' ').map(word => 
+            word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+          ).join(' ')
+        }
+      }
+      // Priority 3: Use tablestatus from server API (REAL API FIELD - same logic as WebSocket)
+      // WebSocket uses: isLive = tableData.enable && tableData.tablestatus === 1
+      // tablestatus === 1 means table is live/operational
+      // tablestatus === 4 means table is waiting (not maintenance)
+      // tablestatus !== 1 and !== 4 means table is not live (maintenance or disabled)
+      else if (tablestatus !== undefined) {
+        // Special case: tablestatus === 4 means waiting, not maintenance
+        if (tablestatus === 4) {
+          status = 'Waiting'
+        } else {
+          // Check if table is live (same logic as WebSocket)
+          const isLive = enable !== false && tablestatus === 1
+          if (isLive) {
+            // Table is live and enabled - use round status to determine current game state
+            if (table.roundstatus === 1) {
+              status = 'Betting'
+            } else if (table.roundstatus === 2) {
+              status = 'Fighting'
+            } else if (table.roundstatus === 4) {
+              status = 'Settled'
+            } else if (table.roundstatus === 0 || table.roundstatus === undefined) {
+              // Table is live but no active round yet - waiting for next round
+              status = 'Waiting'
+            } else {
+              // Table is live but round status unknown (could be 3, 5, etc.) - default to waiting
+              status = 'Waiting'
+            }
+          } else {
+            // tablestatus !== 1 and !== 4 OR enable === false means table is not live (maintenance or disabled)
+            status = 'Maintenance'
+          }
+        }
+      }
+      // Fallback: Use round status only if table status is not available
+      else if (table.roundstatus !== undefined) {
+        if (table.roundstatus === 1) {
+          status = 'Betting'
+        } else if (table.roundstatus === 2) {
+          status = 'Fighting'
+        } else if (table.roundstatus === 4) {
+          status = 'Settled'
+        } else if (table.roundstatus === 0) {
+          status = 'Waiting'
+        } else {
+          // Unknown roundstatus value (3, 5, etc.) - treat as waiting
+          status = 'Waiting'
+        }
+      }
+      // Last resort: Use countdown or other indicators
+      else if (table.countdown !== undefined && table.countdown > 0) {
         status = 'Betting'
       } else if (table.countdown === 0 || table.is_fighting) {
         status = 'Fighting'
@@ -130,10 +226,8 @@ const GameSummary: React.FC<GameSummaryProps> = ({ onClose }) => {
       const openCount = table.open_count || table.player_count || table.online_count || table.count || 0
       
       // Check if table is in maintenance
-      // Based on backend logic: table is live when enable === true AND tablestatus === 1
+      // Based on backend logic: table is live when enable === true AND tablestatus === 1 (same as WebSocket)
       // Maintenance should be detected conservatively - only if explicitly indicated
-      const enable = table.enable
-      const tablestatus = table.tablestatus
       
       // Log ALL table data for debugging to verify API response structure
       if (import.meta.env.DEV) {
@@ -152,41 +246,62 @@ const GameSummary: React.FC<GameSummaryProps> = ({ onClose }) => {
         })
       }
       
-      // Conservative maintenance detection based on actual API response:
-      // A table is in maintenance ONLY if:
-      // 1. enable is explicitly false (not undefined/null/true)
-      // 2. OR there's an explicit maintenance/maintain flag set to true
-      // 
-      // Note: We do NOT check tablestatus !== 1 because:
-      // - tablestatus might not exist in API response for all tables
-      // - tablestatus might have values other than 1 that don't mean maintenance
-      // - According to WebSocket logic: table is "live" when enable && tablestatus === 1
-      //   but that doesn't mean other tablestatus values indicate maintenance
+      // Check maintenance status
+      // IMPORTANT: If roundstatus indicates an active game (1=betting, 2=fighting, 4=settled),
+      // the table is NOT in maintenance even if enable is false (could be temporary state)
+      // Also: tablestatus === 4 means waiting, not maintenance
+      // Maintenance should ONLY be shown if:
+      // 1. enable is explicitly false AND there's no active round status, OR
+      // 2. Explicit maintenance/maintain flags are set
+      // 3. tablestatus is NOT 1 and NOT 4 (excluding waiting status from maintenance)
+      const hasActiveRoundStatus = table.roundstatus === 1 || table.roundstatus === 2 || table.roundstatus === 4
+      
       const isMaintenance = 
-        enable === false ||  // Explicitly disabled (strict equality check)
+        (enable === false && !hasActiveRoundStatus) ||  // Disabled AND no active round
+        (tablestatus !== undefined && tablestatus !== 1 && tablestatus !== 4 && !hasActiveRoundStatus) ||  // tablestatus !== 1 and !== 4 (waiting excluded)
         table.maintenance === true ||  // Explicit maintenance flag
         table.maintain === true  // Explicit maintain flag
       
       if (import.meta.env.DEV) {
-        console.log(`📊 [Table ${mappedTableId}] Maintenance Result:`, {
+        console.log(`📊 [Table ${mappedTableId}] Status Check:`, {
           enable,
-          enableIsFalse: enable === false,
+          tablestatus,
+          roundstatus: table.roundstatus,
+          hasActiveRoundStatus,
           maintenance: table.maintenance,
           maintain: table.maintain,
           isMaintenance,
-          willBeDisabled: isMaintenance
+          calculatedStatus: status
         })
       }
+
+      // If roundstatus indicates fighting (2), always show Fighting, don't let maintenance override
+      if (table.roundstatus === 2 && status !== 'Fighting') {
+        status = 'Fighting'
+      }
+      
+      // Only override with Maintenance if truly in maintenance (not during active game)
+      const finalStatus = isMaintenance && !hasActiveRoundStatus ? 'Maintenance' : status
+
+      // Format: roundId[roundNumber] from server (e.g., "1268197[118")
+      const roundIdentifier = roundId && round 
+        ? `${roundId}[${round}`
+        : roundId 
+        ? String(roundId)
+        : round 
+        ? `[${round}`
+        : ''
 
       tablesList.push({
         id: mappedTableId,
         name: tableName,
         round: typeof round === 'number' ? round : parseInt(String(round)) || 0,
-        status: isMaintenance ? 'Maintenance' : status,
+        roundIdentifier: roundIdentifier, // Format: roundId[roundNumber from server
+        status: finalStatus,
         openCount: typeof openCount === 'number' ? openCount : parseInt(String(openCount)) || 0,
         tableId: mappedTableId, // Use mapped table ID (CF01, CF02, etc.)
         roundId: roundId,
-        isMaintenance: isMaintenance
+        isMaintenance: isMaintenance && !hasActiveRoundStatus
       })
     })
 
@@ -203,10 +318,16 @@ const GameSummary: React.FC<GameSummaryProps> = ({ onClose }) => {
   /**
    * Fetches table/room information from API
    */
-  const fetchTables = useCallback(async () => {
-    // Throttle API calls - don't fetch more than once every 10 seconds
+  const fetchTables = useCallback(async (force = false) => {
+    // Throttle API calls - don't fetch more than once every 20 seconds (increased from 10s)
+    // But allow force fetch when component becomes visible
     const now = Date.now()
-    if (now - lastFetchTimeRef.current < 10000) return
+    if (!force && now - lastFetchTimeRef.current < 20000) {
+      if (import.meta.env.DEV) {
+        console.debug('⏸️ Throttled GameSummary fetchTables call')
+      }
+      return
+    }
     
     lastFetchTimeRef.current = now
 
@@ -217,25 +338,39 @@ const GameSummary: React.FC<GameSummaryProps> = ({ onClose }) => {
       if (sessionManager.getSessionId()) {
         try {
           // Use throttling utility to prevent duplicate calls
+          // But allow force fetch to bypass throttling when component becomes visible
           const throttleKey = 'lobbyinfo_gamesummary'
-          if (!shouldThrottle(throttleKey, 10000)) {
+          if (!force && !shouldThrottle(throttleKey, 20000)) {
             if (import.meta.env.DEV) {
               console.debug('⏸️ Throttled GameSummary lobbyinfo call')
             }
             return
           }
           
+          // If force fetch, clear any existing throttle to ensure fresh fetch
+          if (force) {
+            completeThrottle(throttleKey)
+          }
+          
           lobbyData = await apiService.getLobbyInfo()
-          completeThrottle(throttleKey)
+          if (!force) {
+            completeThrottle(throttleKey)
+          }
         } catch (error) {
           // If authenticated fails, we can't get table info
           // Failed to fetch lobby info
           setTables([])
+          if (import.meta.env.DEV) {
+            console.error('❌ Failed to fetch lobby info:', error)
+          }
           return
         }
       } else {
         // No session, can't fetch lobby info
         setTables([])
+        if (import.meta.env.DEV) {
+          console.warn('⚠️ No session available for GameSummary')
+        }
         return
       }
 
@@ -257,25 +392,33 @@ const GameSummary: React.FC<GameSummaryProps> = ({ onClose }) => {
     } catch (error) {
       setTables([])
       // Failed to fetch tables
+      if (import.meta.env.DEV) {
+        console.error('❌ Failed to fetch tables in GameSummary:', error)
+      }
     }
   }, [parseLobbyInfo])
 
   /**
    * Sets up periodic table fetching
+   * Always force fetch when component mounts (becomes visible) to ensure tables are loaded
    */
   useEffect(() => {
-    // Initial fetch
-    fetchTables()
+    // Always force fetch when component mounts/becomes visible
+    // This ensures tables are always loaded when Game Summary opens, regardless of throttling
+    if (import.meta.env.DEV) {
+      console.log('🔄 GameSummary: Component mounted, fetching tables (force)')
+    }
+    fetchTables(true) // Force fetch on mount
     
-    // Poll every 15 seconds for updates (reduced frequency to prevent server overload)
+    // Poll every 60 seconds for updates (reduced frequency to minimize server calls)
     const interval = setInterval(() => {
-      fetchTables()
-    }, 15000)
+      fetchTables() // Regular fetch (will be throttled)
+    }, 60000) // Increased from 30s to 60s
 
     return () => {
       clearInterval(interval)
     }
-  }, [fetchTables])
+  }, [fetchTables]) // Only depend on fetchTables, not tables.length
 
   /**
    * Gets the tables to display
@@ -295,20 +438,25 @@ const GameSummary: React.FC<GameSummaryProps> = ({ onClose }) => {
   }, [])
 
   /**
+   * Translates status value to current language
+   */
+  const translateStatus = useCallback((status: string): string => {
+    const statusLower = status.toLowerCase()
+    if (statusLower.includes('betting')) return t('gameSummary.status.betting')
+    if (statusLower.includes('fighting')) return t('gameSummary.status.fighting')
+    if (statusLower.includes('waiting')) return t('gameSummary.status.waiting')
+    if (statusLower.includes('settled')) return t('gameSummary.status.settled')
+    if (statusLower.includes('maintenance')) return t('gameSummary.status.maintenance')
+    return status // Fallback to original if unknown
+  }, [t])
+
+  /**
    * Handles table selection/switching
    * Uses table IDs: CF01, CF02, CF03, CF04, CF05, CF06
    * Triggers full re-initialization with new table data
    */
   const handleTableClick = useCallback((selectedTable: TableInfo) => {
     if (!selectedTable.tableId) return
-    
-    // Don't allow switching to tables in maintenance
-    if (selectedTable.isMaintenance) {
-      if (import.meta.env.DEV) {
-        console.log('⚠️ Cannot switch to table in maintenance:', selectedTable.name)
-      }
-      return
-    }
     
     // Ensure we're using the correct table ID (CF01, CF02, etc.)
     const targetTableId = selectedTable.tableId
@@ -335,7 +483,7 @@ const GameSummary: React.FC<GameSummaryProps> = ({ onClose }) => {
     <div className="game-summary-container">
       {/* Header */}
       <div className="game-summary-header">
-        <h2 className="text-white text-lg font-bold">Rooms</h2>
+        <h2 className="text-white text-lg font-bold">{t('gameSummary.title')}</h2>
         {onClose && (
           <button
             onClick={onClose}
@@ -351,14 +499,13 @@ const GameSummary: React.FC<GameSummaryProps> = ({ onClose }) => {
       <div className="games-grid">
         {gameSummaries.map((game) => {
           const isActiveTable = game.tableId === tableId
-          const isDisabled = game.isMaintenance
           return (
             <div 
               key={game.id} 
-              className={`game-card ${isActiveTable ? 'active-table' : ''} ${isDisabled ? 'disabled-table' : ''}`}
-              onClick={() => !isDisabled && handleTableClick(game)}
-              style={{ cursor: isDisabled ? 'not-allowed' : 'pointer' }}
-              title={isDisabled ? `${game.name} is in maintenance` : `Click to switch to ${game.name}`}
+              className={`game-card ${isActiveTable ? 'active-table' : ''}`}
+              onClick={() => handleTableClick(game)}
+              style={{ cursor: 'pointer' }}
+              title={`Click to switch to ${game.name}`}
             >
               <div className="game-card-body">
                 {/* Table Name */}
@@ -370,18 +517,19 @@ const GameSummary: React.FC<GameSummaryProps> = ({ onClose }) => {
                 </div>
 
                 {/* Round Number */}
-                <div className="game-detail">
-                  <span className="detail-label text-gray-400 text-xs">Round</span>
-                  <span className={`detail-value text-sm font-semibold`}>
-                    {game.round}
-                  </span>
-                </div>
+                {game.round > 0 && (
+                  <div className="game-detail">
+                    <span className="detail-value text-sm font-semibold text-white">
+                      {game.round}
+                    </span>
+                  </div>
+                )}
 
                 {/* Status */}
                 <div className="game-detail">
-                  <span className="detail-label text-gray-400 text-xs">Status</span>
+                  <span className="detail-label text-gray-400 text-xs">{t('gameSummary.status.label')}</span>
                   <span className={`detail-value text-sm font-semibold px-2 py-1 rounded ${getStatusBgColor(game.status)}`}>
-                    {game.status}
+                    {translateStatus(game.status)}
                   </span>
                 </div>
               </div>

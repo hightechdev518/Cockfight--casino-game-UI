@@ -160,6 +160,43 @@
   }
 }
 
+/* Mobile Landscape: expanded chips panel should be scrollable and fully visible.
+   Without this, small-height landscape screens can clip the chip list. */
+@media (orientation: landscape) and (max-width: 1023px) {
+  .chips-grid {
+    position: fixed;
+    /* Leave room for the left vertical control bar (70px; 60px on very small) */
+    left: 70px;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: auto;
+    height: auto;
+    max-height: 100dvh;
+
+    /* Layout: wrap into rows and allow scrolling */
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-content: flex-start;
+
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+
+    /* Ensure it stays above the game surface */
+    z-index: 1000;
+    padding: 0.5rem;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 600px) and (max-width: 1023px) {
+  .chips-grid {
+    left: 60px; /* matches smaller landscape control bar width */
+  }
+}
+
 @media (max-width: 768px) {
   .chip {
     width: 58px; /* Better touch target */
@@ -213,18 +250,23 @@
   .chips-container.chips-desktop-horizontal {
     display: flex !important;
     align-items: center !important;
-    justify-content: center !important;
-    gap: 0.3rem !important;
+    justify-content: flex-start !important;
+    gap: 0.6rem !important;
     width: auto !important;
     flex-shrink: 0 !important;
+    margin-right: 0.75rem !important;
+    padding: 0.35rem 0.75rem !important;
+    /* Give the chip panel more vertical room so all chips are visible
+       without needing to scroll the bottom control bar in PC mode. */
+    min-height: 72px !important;
   }
 
   .chips-grid-desktop {
     display: flex !important;
     flex-direction: row !important;
     align-items: center !important;
-    justify-content: center !important;
-    gap: 0.3rem !important;
+    justify-content: flex-start !important;
+    gap: 0.6rem !important;
     position: static !important;
     bottom: auto !important;
     left: auto !important;
@@ -245,65 +287,35 @@
     object-fit: contain !important;
   }
 
-  /* Increase gap between chips for better spacing with larger chips */
+  /* Consistent gap between chips */
   .chips-container.chips-desktop-horizontal {
-    gap: 0.5rem !important;
+    gap: 0.6rem !important;
   }
 
   .chips-grid-desktop {
-    gap: 0.5rem !important;
+    gap: 0.6rem !important;
   }
 
-  /* Pop-up animation for selected chip in desktop mode */
+  /* Pop-up animation for selected chip in desktop mode (no yellow ring) */
   .chips-container.chips-desktop-horizontal .chip.selected {
-    animation: chipPopUp 0.4s ease-out;
-    transform: scale(1.15);
+    animation: chipPopUp 0.25s ease-out;
+    transform: translateY(-6px) scale(1.05);
     z-index: 10;
-    position: relative;
-  }
-
-  .chips-container.chips-desktop-horizontal .chip.selected::before {
-    content: '';
-    position: absolute;
-    top: -4px;
-    left: -4px;
-    right: -4px;
-    bottom: -4px;
-    border-radius: 50%;
-    border: 3px solid #ffd700;
-    box-shadow: 
-      0 0 10px rgba(255, 215, 0, 0.6),
-      0 0 20px rgba(255, 215, 0, 0.4),
-      0 0 30px rgba(255, 215, 0, 0.2);
-    animation: chipGlow 1.5s ease-in-out infinite;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.45);
   }
 
   @keyframes chipPopUp {
     0% {
-      transform: scale(1);
+      transform: translateY(0) scale(1);
+      box-shadow: 0 0 0 rgba(0, 0, 0, 0.0);
     }
-    50% {
-      transform: scale(1.25);
+    60% {
+      transform: translateY(-10px) scale(1.1);
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
     }
     100% {
-      transform: scale(1.15);
-    }
-  }
-
-  @keyframes chipGlow {
-    0%, 100% {
-      opacity: 1;
-      box-shadow: 
-        0 0 10px rgba(255, 215, 0, 0.6),
-        0 0 20px rgba(255, 215, 0, 0.4),
-        0 0 30px rgba(255, 215, 0, 0.2);
-    }
-    50% {
-      opacity: 0.8;
-      box-shadow: 
-        0 0 15px rgba(255, 215, 0, 0.8),
-        0 0 25px rgba(255, 215, 0, 0.6),
-        0 0 35px rgba(255, 215, 0, 0.4);
+      transform: translateY(-6px) scale(1.05);
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.45);
     }
   }
 

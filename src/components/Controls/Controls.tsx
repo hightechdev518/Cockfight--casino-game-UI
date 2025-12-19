@@ -1,4 +1,7 @@
-import { useCallback } from 'react'
+import { useCallback, useState, useEffect } from 'react'
+import { useGameStore } from '../../store/gameStore'
+import { useI18n } from '../../i18n/LanguageContext'
+import AccountInfo from '../AccountInfo/AccountInfo'
 import './Controls.css'
 
 /**
@@ -38,6 +41,20 @@ interface ControlsProps {
  * @returns JSX element
  */
 const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onRebet, chipSlot, pendingBetAmount = 0, isSubmitting = false, confirmedBetsCount = 0, isBettingClosed = false }) => {
+  const { toggleGameSummary } = useGameStore()
+  const { t } = useI18n()
+  const [isDesktop, setIsDesktop] = useState(false)
+
+  // Detect desktop mode
+  useEffect(() => {
+    const checkDesktop = () => {
+      setIsDesktop(window.innerWidth >= 1024)
+    }
+    
+    checkDesktop()
+    window.addEventListener('resize', checkDesktop)
+    return () => window.removeEventListener('resize', checkDesktop)
+  }, [])
   /**
    * Handles rebet button click - places the same bets as last round
    * Disabled if there are confirmed bets or if betting is closed
@@ -91,52 +108,85 @@ const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onReb
    */
   const isDoubleDisabled = pendingBetAmount === 0 || isSubmitting || !isBettingAllowed
 
-  /**
-   * Current timestamp formatted
-   */
-
   return (
     <div className={`controls-inline ${isBettingClosed ? 'betting-closed' : ''}`} style={{ flex: '0 0 auto' }}>
       {/* Left side buttons */}
       <div className="controls-left-group">
-        <button 
-          className={`control-btn-circle refresh ${isRebetDisabled ? 'disabled' : ''}`}
-          onClick={handleRebetClick}
-          disabled={isRebetDisabled}
-          aria-label="Rebet - Place same bets as last round"
-          aria-disabled={isRebetDisabled}
-          type="button"
-          title="Rebet - Place same bets as last round"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
-          </svg>
-        </button>
+        {/* Mobile / non-desktop: rebet button stays on the left */}
+        {!isDesktop && (
+          <button 
+            className={`control-btn-circle refresh ${isRebetDisabled ? 'disabled' : ''}`}
+            onClick={handleRebetClick}
+            disabled={isRebetDisabled}
+            aria-label="Rebet - Place same bets as last round"
+            aria-disabled={isRebetDisabled}
+            type="button"
+            title="Rebet - Place same bets as last round"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+            </svg>
+          </button>
+        )}
+
+        {/* PC / desktop: show account info fixed in the left corner of the chips panel */}
+        {isDesktop && <AccountInfo />}
       </div>
 
-      {/* Middle buttons */}
+      {/* Middle buttons + account info */}
       <div className="controls-center-group">
-        <button 
-          className={`control-btn-circle confirm ${pendingBetAmount > 0 && !isSubmitting ? 'has-pending-bet' : ''}`}
-          onClick={onConfirm} 
-          disabled={isConfirmDisabled}
-          aria-label="Confirm bets"
-          aria-disabled={isConfirmDisabled}
-          type="button"
-        >
-          {isSubmitting ? (
-            <svg className="animate-spin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <circle cx="12" cy="12" r="10" strokeOpacity="0.25"/>
-              <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round"/>
-            </svg>
-          ) : (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path d="M20 6L9 17l-5-5"/>
-            </svg>
-          )}
-        </button>
-        {/* Chip slot - inserted between confirm and clear */}
-        {chipSlot}
+        {/* Mobile: Confirm -> Chip -> Clear */}
+        {!isDesktop && (
+          <>
+            <button 
+              className={`control-btn-circle confirm ${pendingBetAmount > 0 && !isSubmitting ? 'has-pending-bet' : ''}`}
+              onClick={onConfirm} 
+              disabled={isConfirmDisabled}
+              aria-label="Confirm bets"
+              aria-disabled={isConfirmDisabled}
+              type="button"
+            >
+              {isSubmitting ? (
+                <svg className="animate-spin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <circle cx="12" cy="12" r="10" strokeOpacity="0.25"/>
+                  <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round"/>
+                </svg>
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M20 6L9 17l-5-5"/>
+                </svg>
+              )}
+            </button>
+            {/* Chip slot - inserted between confirm and clear */}
+            {chipSlot}
+          </>
+        )}
+        {/* PC mode: Chip -> Confirm (account info is rendered in the left group) */}
+        {isDesktop && (
+          <>
+            {/* Chip slot - centered group, to the right of the left-corner account info */}
+            {chipSlot}
+            <button 
+              className={`control-btn-circle confirm ${pendingBetAmount > 0 && !isSubmitting ? 'has-pending-bet' : ''}`}
+              onClick={onConfirm} 
+              disabled={isConfirmDisabled}
+              aria-label="Confirm bets"
+              aria-disabled={isConfirmDisabled}
+              type="button"
+            >
+              {isSubmitting ? (
+                <svg className="animate-spin" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <circle cx="12" cy="12" r="10" strokeOpacity="0.25"/>
+                  <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round"/>
+                </svg>
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M20 6L9 17l-5-5"/>
+                </svg>
+              )}
+            </button>
+          </>
+        )}
         <button 
           className={`control-btn-circle clear ${isClearDisabled ? 'disabled' : ''}`}
           onClick={onClear}
@@ -160,6 +210,34 @@ const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onReb
         >
           <span className="double-text">X2</span>
         </button>
+        {/* PC mode: place rebet button to the right of the double (X2) button */}
+        {isDesktop && (
+          <button 
+            className={`control-btn-circle refresh ${isRebetDisabled ? 'disabled' : ''}`}
+            onClick={handleRebetClick}
+            disabled={isRebetDisabled}
+            aria-label="Rebet - Place same bets as last round"
+            aria-disabled={isRebetDisabled}
+            type="button"
+            title="Rebet - Place same bets as last round"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+            </svg>
+          </button>
+        )}
+        {/* Arena button - only in PC mode, stays on the far right */}
+        {isDesktop && (
+          <button
+            onClick={toggleGameSummary}
+            className="arena-button-controls"
+            title="Switch to Game Summary"
+            type="button"
+          >
+            <img src="./home.svg" alt="Home" className="arena-icon" />
+            <span className="arena-text">{t('gameHistory.arena')}</span>
+          </button>
+        )}
       </div>
 
     </div>

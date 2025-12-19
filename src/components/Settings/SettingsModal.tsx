@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { getCurrentLanguage, setLanguage, LANGUAGES, type LanguageCode, getLanguage } from '../../utils/language'
+import { getCurrentLanguage, LANGUAGES, type LanguageCode, getLanguage } from '../../utils/language'
+import { useI18n } from '../../i18n/LanguageContext'
 import './SettingsModal.css'
 
 interface SettingsModalProps {
@@ -10,6 +11,7 @@ interface SettingsModalProps {
 type TabType = 'general' | 'language' | 'sound' | 'video'
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
+  const { t, setAppLanguage } = useI18n()
   const [activeTab, setActiveTab] = useState<TabType>('general')
   const [settings, setSettings] = useState({
     showBettingStatistics: true,
@@ -54,16 +56,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
 
   const handleLanguageChange = (languageCode: LanguageCode) => {
     setSelectedLanguage(languageCode)
-    setLanguage(languageCode)
+    setAppLanguage(languageCode)
     setIsLanguageDropdownOpen(false)
-    
-    // Reload page to apply language changes
-    if (import.meta.env.DEV) {
-      console.log('🌐 Language changed, reloading page...')
-    }
-    setTimeout(() => {
-      window.location.reload()
-    }, 300)
   }
 
   if (!isOpen) return null
@@ -73,7 +67,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
       <div className="settings-modal" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="settings-modal-header">
-          <h2 className="settings-modal-title">Settings</h2>
+          <h2 className="settings-modal-title">{t('settings.title')}</h2>
           <button 
             className="settings-modal-close"
             onClick={onClose}
@@ -89,25 +83,25 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
             className={`settings-tab ${activeTab === 'general' ? 'active' : ''}`}
             onClick={() => setActiveTab('general')}
           >
-            General
+            {t('settings.tabs.general')}
           </button>
           <button
             className={`settings-tab ${activeTab === 'language' ? 'active' : ''}`}
             onClick={() => setActiveTab('language')}
           >
-            Language
+            {t('settings.tabs.language')}
           </button>
           <button
             className={`settings-tab ${activeTab === 'sound' ? 'active' : ''}`}
             onClick={() => setActiveTab('sound')}
           >
-            Sound
+            {t('settings.tabs.sound')}
           </button>
           <button
             className={`settings-tab ${activeTab === 'video' ? 'active' : ''}`}
             onClick={() => setActiveTab('video')}
           >
-            Video
+            {t('settings.tabs.video')}
           </button>
         </div>
 
@@ -124,7 +118,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
                     className="settings-checkbox"
                   />
                   <span className="settings-checkbox-custom"></span>
-                  <span className="settings-option-text">SHOW BETTING STATISTICS</span>
+                  <span className="settings-option-text">
+                    {t('settings.general.showBettingStatistics')}
+                  </span>
                 </label>
               </div>
             </div>
@@ -133,7 +129,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
           {activeTab === 'language' && (
             <div className="settings-tab-content">
               <div className="settings-language-section">
-                <label className="settings-language-label">Language</label>
                 <div className="settings-language-dropdown-container">
                   <button
                     className="settings-language-dropdown"
@@ -177,7 +172,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
             <div className="settings-tab-content">
               {/* Sound Section */}
               <div className="settings-sound-section">
-                <label className="settings-sound-label">Sound</label>
+                <label className="settings-sound-label">{t('settings.sound.label')}</label>
                 <div className="settings-sound-controls">
                   <label className="settings-toggle-switch">
                     <input
@@ -193,7 +188,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
 
               {/* Live Section */}
               <div className="settings-sound-section">
-                <label className="settings-sound-label">Live</label>
+                <label className="settings-sound-label">{t('settings.live.label')}</label>
                 <div className="settings-sound-controls">
                   <label className="settings-toggle-switch">
                     <input
@@ -213,7 +208,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
             <div className="settings-tab-content">
               {/* Video Toggle Section */}
               <div className="settings-sound-section">
-                <label className="settings-sound-label">Video</label>
+                <label className="settings-sound-label">{t('settings.video.label')}</label>
                 <div className="settings-sound-controls">
                   <label className="settings-toggle-switch">
                     <input
@@ -229,7 +224,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose }) => {
 
               {/* Line Selection Section */}
               <div className="settings-line-section">
-                <label className="settings-line-label">Line</label>
+                <label className="settings-line-label">{t('settings.video.lineLabel')}</label>
                 <div className="settings-line-options">
                   {['01', '02', '03', '04'].map((line) => (
                     <button

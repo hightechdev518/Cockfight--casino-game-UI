@@ -7,7 +7,7 @@
   flex-shrink: 0;
 }
 
-/* Show in landscape mode only */
+/* Show in landscape mode only, but hide in PC mode */
 @media (orientation: landscape) {
   .betting-summary-bar {
     display: flex;
@@ -15,6 +15,13 @@
     justify-content: space-between;
     gap: 12px;
     min-height: 40px;
+  }
+}
+
+/* Hide in PC mode (min-width: 1024px) */
+@media (min-width: 1024px) {
+  .betting-summary-bar {
+    display: none !important;
   }
 }
 

@@ -208,6 +208,22 @@
   }
 }
 
+/* Arena button pulse animation - global */
+@keyframes arenaButtonPulse {
+  0%, 100% {
+    box-shadow: 
+      0 2px 8px rgba(0, 0, 0, 0.3),
+      0 0 0 0 rgba(64, 169, 255, 0.4);
+  }
+  50% {
+    box-shadow: 
+      0 2px 8px rgba(0, 0, 0, 0.3),
+      0 0 20px rgba(64, 169, 255, 0.6),
+      0 0 35px rgba(64, 169, 255, 0.4),
+      0 0 50px rgba(64, 169, 255, 0.2);
+  }
+}
+
 /* Mobile Responsive Styles */
 @media (max-width: 768px) {
   .control-btn-circle {
@@ -267,11 +283,14 @@
     flex-direction: row !important;
     align-items: center !important;
     justify-content: space-between !important;
-    gap: 0.75rem !important;
+    gap: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
     height: auto !important;
     flex: 1 !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+    position: relative !important;
   }
 
   .controls-left-group {
@@ -280,6 +299,10 @@
     gap: 0.75rem !important;
     width: auto !important;
     flex-shrink: 0 !important;
+    position: absolute !important;
+    left: 1.25rem !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
   }
 
   .controls-center-group {
@@ -287,9 +310,10 @@
     align-items: center !important;
     gap: 0.75rem !important;
     width: auto !important;
-    flex: 1 !important;
-    justify-content: space-evenly !important;
+    flex: 0 0 auto !important;
+    justify-content: center !important;
     padding-left: 0 !important;
+    margin: 0 auto !important;
   }
 
 
@@ -299,4 +323,179 @@
     flex-shrink: 0 !important;
   }
 
+  /* Arena button in controls - PC mode only, positioned on right side */
+  .arena-button-controls {
+    background: linear-gradient(135deg, rgba(60, 60, 60, 0.95) 0%, rgba(70, 70, 70, 0.95) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    padding: 6px 12px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 
+      0 2px 8px rgba(0, 0, 0, 0.3),
+      0 0 0 0 rgba(64, 169, 255, 0.4);
+    flex-shrink: 0;
+    margin-left: 0;
+    position: absolute !important;
+    right: 1.25rem !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    overflow: hidden;
+    animation: arenaButtonPulse 2.5s ease-in-out infinite;
+  }
+
+  .arena-button-controls::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.1),
+      transparent
+    );
+    transition: left 0.6s ease;
+  }
+
+  .arena-button-controls:hover::before {
+    left: 100%;
+  }
+
+  .arena-button-controls:hover {
+    background: linear-gradient(135deg, rgba(80, 80, 80, 0.95) 0%, rgba(90, 90, 90, 0.95) 100%);
+    border-color: rgba(255, 255, 255, 0.6);
+    transform: translateY(-50%) scale(1.08) !important;
+    box-shadow: 
+      0 4px 16px rgba(0, 0, 0, 0.4),
+      0 0 20px rgba(255, 255, 255, 0.25),
+      0 0 35px rgba(255, 255, 255, 0.15),
+      inset 0 0 20px rgba(255, 255, 255, 0.05);
+    animation: none;
+  }
+
+  .arena-button-controls:active {
+    background: linear-gradient(135deg, rgba(50, 50, 50, 0.95) 0%, rgba(60, 60, 60, 0.95) 100%);
+    transform: translateY(-50%) scale(1.02) !important;
+    box-shadow: 
+      0 2px 8px rgba(0, 0, 0, 0.3),
+      0 0 10px rgba(255, 255, 255, 0.2);
+  }
+
+  .arena-button-controls .arena-icon {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.3));
+  }
+
+  .arena-button-controls:hover .arena-icon {
+    transform: scale(1.15) translateY(-2px);
+    filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.6));
+  }
+
+  .arena-button-controls .arena-text {
+    color: #e0e0e0;
+    font-size: 0.9rem;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  }
+
+  .arena-button-controls:hover .arena-text {
+    color: #ffffff;
+    text-shadow: 
+      0 1px 2px rgba(0, 0, 0, 0.3),
+      0 0 10px rgba(255, 255, 255, 0.3);
+    letter-spacing: 0.5px;
+  }
+}
+
+/* Mobile / default Arena button + status badge layout */
+.arena-button-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: linear-gradient(135deg, rgba(60, 60, 60, 0.95) 0%, rgba(70, 70, 70, 0.95) 100%);
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.85rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.arena-button-mobile {
+  height: 40px;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  /* Match GameHistory / roadmap background so badge blends into the bar */
+  background: rgba(60, 60, 60, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+}
+
+.status-dot.betting {
+  color: #22c55e; /* green */
+}
+.status-badge .status-dot.betting + .status-text {
+  color: #22c55e;
+}
+
+.status-dot.fighting {
+  color: #ef4444; /* red */
+}
+.status-badge .status-dot.fighting + .status-text {
+  color: #ef4444;
+}
+
+.status-dot.waiting,
+.status-dot.no-fight-now {
+  color: #f59e0b; /* amber */
+}
+.status-badge .status-dot.waiting + .status-text,
+.status-badge .status-dot.no-fight-now + .status-text {
+  color: #f59e0b;
+}
+
+.status-dot.settling {
+  color: #38bdf8; /* blue */
+}
+.status-badge .status-dot.settling + .status-text {
+  color: #38bdf8;
+}
+
+.status-dot.canceled {
+  color: #9ca3af; /* gray */
+}
+.status-badge .status-dot.canceled + .status-text {
+  color: #9ca3af;
 }

@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react'
+import { useI18n } from '../../i18n/LanguageContext'
 import './SuccessOverlay.css'
 
 interface SuccessOverlayProps {
@@ -11,11 +12,12 @@ interface SuccessOverlayProps {
 const SuccessOverlay: React.FC<SuccessOverlayProps> = ({
   show,
   onClose,
-  message = 'Bet Success',
+  message,
   duration = 1600
 }) => {
+  const { t } = useI18n()
+  const displayMessage = message || t('bet.success.message')
   useEffect(() => {
-    console.log(show)
     if (!show) return
     const timer = setTimeout(() => {
       onClose && onClose()
@@ -29,7 +31,7 @@ const SuccessOverlay: React.FC<SuccessOverlayProps> = ({
     <div className="success-overlay" role="status" aria-live="polite">
       <div className="success-card">
         <div className="success-sparkles" aria-hidden />
-        <div className="success-text">{message}</div>
+        <div className="success-text">{displayMessage}</div>
       </div>
     </div>
   )

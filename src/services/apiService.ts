@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { getCurrentLanguage } from '../utils/language'
 
 // Configure your API base URL here
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://apih5.ho8.net'
@@ -11,6 +12,11 @@ const USERNAME_KEY = 'username'
 // Generate unique ID for replay protection
 const generateUniqueId = (): string => {
   return `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`
+}
+
+const applyLanguageHeaders = (lang: string) => {
+  formClient.defaults.headers.common['Accept-Language'] = lang
+  jsonClient.defaults.headers.common['Accept-Language'] = lang
 }
 
 // Create axios instance for form-encoded requests (betting endpoint)
@@ -30,6 +36,19 @@ const jsonClient = axios.create({
   },
   timeout: 10000,
 })
+
+// Set initial language headers
+applyLanguageHeaders(getCurrentLanguage())
+
+// Update headers when language changes
+if (typeof window !== 'undefined') {
+  window.addEventListener('languageChanged', (event: any) => {
+    const lang = event?.detail?.language
+    if (lang) {
+      applyLanguageHeaders(lang)
+    }
+  })
+}
 
 // Standard API response format
 export interface ApiResponse<T = any> {
@@ -207,6 +226,12 @@ export const sessionManager = {
 
   setSessionId: (sessId: string): void => {
     localStorage.setItem(SESSION_STORAGE_KEY, sessId)
+    // Dispatch event to notify that session was set (for grace period tracking)
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('session_set', {
+        detail: { timestamp: Date.now() }
+      }))
+    }
   },
 
   clearSession: (): void => {
@@ -320,19 +345,11 @@ export const apiService = {
     formData.append('sess_id', sessId)
     formData.append('uniqueid', generateUniqueId())
 
-    // Add headers to match original site's request format
-    const response = await formClient.post<PlayerInfoResponse>('/playerinfo.php', formData.toString(), {
-      headers: {
-        'Origin': 'https://game.ho8.net',
-        'Referer': 'https://game.ho8.net/',
-      },
-    })
+    // Note: Origin and Referer headers are automatically set by the browser and cannot be manually set
+    const response = await formClient.post<PlayerInfoResponse>('/playerinfo.php', formData.toString())
     
     // Check for B232 session expired error
     if (response.data.code === 'B232') {
-      if (import.meta.env.DEV) {
-        console.error('❌ Session expired (B232) from playerinfo.php:', response.data)
-      }
       // Dispatch event to trigger session expired modal
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('session_expired', {
@@ -356,24 +373,7 @@ export const apiService = {
     const formData = new URLSearchParams()
     formData.append('sess_id', sessId)
 
-    if (import.meta.env.DEV) {
-      console.log('💰 Fetching balance from API:', {
-        endpoint: '/balance.php',
-        sess_id: sessId.substring(0, 8) + '...' // Log partial session ID for security
-      })
-    }
-
     const response = await formClient.post<any>('/balance.php', formData.toString())
-    
-    if (import.meta.env.DEV) {
-      console.log('💰 Balance API raw response:', {
-        code: response.data?.code,
-        msg: response.data?.msg,
-        balance: response.data?.balance,
-        balanceType: typeof response.data?.balance,
-        fullResponse: response.data
-      })
-    }
     
     // Handle balance - can be string or number according to API
     let balanceValue: number | null = null
@@ -397,34 +397,16 @@ export const apiService = {
     if (balanceValue !== null && !isNaN(balanceValue) && isFinite(balanceValue)) {
       // Note: -1 means balance not yet queried from operator (per README)
       // We still return it, but log a warning
-      if (balanceValue === -1 && import.meta.env.DEV) {
-        console.warn('⚠️ Balance API returned -1 (not yet queried from operator)')
-      }
       return balanceValue
     }
     
     // If success code but no valid balance, log and throw
     if (isSuccess) {
-      if (import.meta.env.DEV) {
-        console.error('❌ Balance API returned success but invalid balance:', {
-          code: response.data.code,
-          msg: response.data.msg,
-          balance: response.data.balance,
-          fullResponse: response.data
-        })
-      }
       throw new Error(`Balance API returned success but invalid balance: ${response.data.balance}`)
     }
     
     // Error response
     const errorMsg = response.data.msg || response.data.code || 'Failed to get balance'
-    if (import.meta.env.DEV) {
-      console.error('❌ Balance API error:', {
-        code: response.data.code,
-        msg: errorMsg,
-        fullResponse: response.data
-      })
-    }
     throw new Error(errorMsg)
   },
 
@@ -434,7 +416,7 @@ export const apiService = {
    * URL: /odds.php
    * Content-Type: application/x-www-form-urlencoded
    * Fields: sess_id, r_no, uniqueid
-   * r_no format: YYMMDD + roundId (e.g., "2512091267712" = 251209 + 1267712)
+   * r_no: Prefer using lobbyinfo.php per-table field "no". Fallback may be YYMMDD + roundId (e.g., "2512091267712" = 251209 + 1267712)
    * Returns: Object with keys like "21001:M", "21002:W", "21003:D"
    */
   getOdds: async (r_no: string | number): Promise<OddsResponse> => {
@@ -449,37 +431,13 @@ export const apiService = {
     formData.append('r_no', r_no.toString())
     formData.append('uniqueid', generateUniqueId())
 
-    if (import.meta.env.DEV) {
-      console.log('📊 Fetching odds from API (POST):', {
-        endpoint: '/odds.php',
-        r_no: r_no,
-        r_no_length: r_no.toString().length,
-        r_no_type: typeof r_no,
-        sess_id: sessId.substring(0, 8) + '...', // Log partial session ID for security
-        payload: `sess_id=${sessId}&r_no=${r_no}&uniqueid=${generateUniqueId()}`
-      })
-    }
-
     // Use POST request with form data (matches original site exactly)
+    // Note: Origin and Referer headers are automatically set by the browser and cannot be manually set
     const response = await formClient.post<OddsResponse>('/odds.php', formData.toString(), {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'Origin': 'https://game.ho8.net',
-        'Referer': 'https://game.ho8.net/',
       },
     })
-
-    if (import.meta.env.DEV) {
-      console.log('📊 Odds API response:', {
-        code: response.data?.code,
-        msg: response.data?.msg,
-        hasData: !!response.data?.data,
-        dataType: typeof response.data?.data,
-        dataKeys: response.data?.data && typeof response.data.data === 'object' && !Array.isArray(response.data.data) ? Object.keys(response.data.data) : [],
-        dataSample: response.data?.data && typeof response.data.data === 'object' ? Object.keys(response.data.data).slice(0, 3) : null,
-        fullResponse: response.data
-      })
-    }
 
     return response.data
   },
@@ -507,68 +465,13 @@ export const apiService = {
     // Always set anyodds to 'Y' to accept server odds automatically
     formData.append('anyodds', 'Y')
 
-    // Log the bet request data being sent to server
-    if (import.meta.env.DEV) {
-      console.log('📤 Sending bet to server:', {
-        endpoint: '/bet_cflive.php',
-        data: {
-          sess_id: sessId,
-          t_id: request.t_id,
-          r_id: request.r_id,
-          type: request.type,
-          zone: request.zone,
-          amount: request.amount,
-          odds: request.odds,
-          uniqueid: uniqueId,
-          cuid: request.cuid,
-          anyodds: 'Y' // Always set to Y to accept server odds automatically
-        },
-        formData: formData.toString()
-      })
-    }
-
     // Use bet_cflive.php endpoint (cockfight betting handler per server rules)
-    // Add headers to match original site's request format
-    const response = await formClient.post<BetResponse>('/bet_cflive.php', formData.toString(), {
-      headers: {
-        'Origin': 'https://game.ho8.net',
-        'Referer': 'https://game.ho8.net/',
-      },
-    })
-    
-    // Log the server response
-    if (import.meta.env.DEV) {
-      console.log('📥 Server response:', {
-        code: response.data.code,
-        msg: response.data.msg,
-        balance: response.data.balance,
-        unsettle: response.data.unsettle,
-        allbets: response.data.allbets,
-        fullResponse: response.data
-      })
-    }
+    // Note: Origin and Referer headers are automatically set by the browser and cannot be manually set
+    const response = await formClient.post<BetResponse>('/bet_cflive.php', formData.toString())
     
     if (response.data.code !== 'B100') {
       const errorMsg = ERROR_CODES[response.data.code] || response.data.msg || 'Betting failed'
-      if (import.meta.env.DEV) {
-        console.error('❌ Betting failed:', {
-          code: response.data.code,
-          error: errorMsg,
-          fullResponse: response.data
-        })
-      }
       throw new Error(`${response.data.code}: ${errorMsg}`)
-    }
-
-    if (import.meta.env.DEV) {
-      console.log('✅ Bet successfully placed:', {
-        amount: request.amount,
-        type: request.type,
-        zone: request.zone,
-        odds: request.odds,
-        newBalance: response.data.balance,
-        wagerNumbers: response.data.unsettle?.map(b => b.w_no) || []
-      })
     }
 
     return response.data
@@ -578,11 +481,9 @@ export const apiService = {
    * Get wager detail by wager number
    */
   getWagerDetail: async (wagerNo: string): Promise<WagerDetailResponse> => {
+    // Note: Referer header is automatically set by the browser and cannot be manually set
     const response = await jsonClient.get<WagerDetailResponse>('/wagerdetail.php', {
       params: { no: wagerNo },
-      headers: {
-        Referer: 'https://game.ho8.net',
-      },
     })
     return response.data
   },
@@ -602,29 +503,8 @@ export const apiService = {
     formData.append('uniqueid', generateUniqueId())
     formData.append('r_id', r_id)
 
-    if (import.meta.env.DEV) {
-      console.log('📋 Calling wager_rid.php:', {
-        r_id,
-        sess_id: sessId.substring(0, 8) + '...'
-      })
-    }
-
-    // Add headers to match original site's request format
-    const response = await formClient.post<BetHistoryResponse>('/wager_rid.php', formData.toString(), {
-      headers: {
-        'Origin': 'https://game.ho8.net',
-        'Referer': 'https://game.ho8.net/',
-      },
-    })
-    
-    if (import.meta.env.DEV) {
-      console.log('📋 wager_rid.php response:', {
-        code: response.data.code,
-        unsettleCount: response.data.unsettle?.length || 0,
-        settleCount: response.data.settle?.length || 0,
-        hasData: !!response.data.data
-      })
-    }
+    // Note: Origin and Referer headers are automatically set by the browser and cannot be manually set
+    const response = await formClient.post<BetHistoryResponse>('/wager_rid.php', formData.toString())
     
     return response.data
   },
@@ -683,9 +563,6 @@ export const apiService = {
     
     // Check for B232 session expired error
     if (response.data.code === 'B232') {
-      if (import.meta.env.DEV) {
-        console.error('❌ Session expired (B232) from lobbyinfo.php:', response.data)
-      }
       // Dispatch event to trigger session expired modal
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('session_expired', {

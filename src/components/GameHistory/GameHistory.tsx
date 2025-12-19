@@ -1,8 +1,17 @@
 import { useCallback, useMemo, useEffect, useRef, useState } from 'react'
-import { useGameStore, GameHistory as GameHistoryType } from '../../store/gameStore'
+import { useGameStore, useGameStore as getGameStore, GameHistory as GameHistoryType } from '../../store/gameStore'
 import { apiService, sessionManager } from '../../services/apiService'
 import BettingSummaryBar from './BettingSummaryBar'
+import { useI18n } from '../../i18n/LanguageContext'
 import './GameHistory.css'
+
+// Silence all console output in src/ (requested cleanup)
+const console: Pick<Console, 'log' | 'warn' | 'error' | 'debug'> = {
+  log: () => {},
+  warn: () => {},
+  error: () => {},
+  debug: () => {},
+}
 
 /**
  * Props for the GameHistory component
@@ -24,10 +33,15 @@ const GRID_CONFIG = {
  * Bead Road Item - represents a single result in the road
  */
 interface BeadRoadItem {
-  result: 'meron' | 'wala' | 'draw'
+  result: 'meron' | 'wala'
+  /** 該格第一個落子回合 */
   round: number
   col: number
   row: number
+  /** 和局次數（和局不落新格，只疊加在最後一格） */
+  tieCount: number
+  /** 和局回合列表（方便 tooltip / debug） */
+  tieRounds: number[]
 }
 
 /**
@@ -42,7 +56,8 @@ interface BeadRoadItem {
  * @returns JSX element
  */
 const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
-  const { gameHistory, autoSubmit, toggleAutoSubmit, currentRound, toggleGameSummary, tableId, setGameHistory } = useGameStore()
+  const { gameHistory, autoSubmit, toggleAutoSubmit, currentRound, toggleGameSummary, tableId, setGameHistory, roundStatus, isLive, tableStatus } = useGameStore()
+  const { t } = useI18n()
   const lastFetchTimeRef = useRef(0)
   const [accuStats, setAccuStats] = useState<{ meronWins: number; walaWins: number; drawWins: number }>({
     meronWins: 0,
@@ -161,13 +176,14 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
 
   /**
    * Fetches history from API
+   * @param force - If true, bypass throttle and force fetch
    */
-  const fetchHistory = useCallback(async () => {
+  const fetchHistory = useCallback(async (force: boolean = false) => {
     if (!tableId) return
     
-    // Throttle API calls - don't fetch more than once every 3 seconds
+    // Throttle API calls - don't fetch more than once every 3 seconds (unless forced)
     const now = Date.now()
-    if (now - lastFetchTimeRef.current < 3000) return
+    if (!force && now - lastFetchTimeRef.current < 3000) return
     
     lastFetchTimeRef.current = now
     
@@ -331,12 +347,177 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
    * Sets up history fetching
    * Only fetches on initial load and when game result comes
    */
+  const hasFetchedInitialHistoryRef = useRef<boolean>(false)
+  const prevTableIdRef = useRef<string | undefined>(undefined)
+  const historyRetryTimeoutRef = useRef<number | null>(null)
+  const historyRetryCountRef = useRef<number>(0)
+  
   useEffect(() => {
-    if (!tableId) return
+    // Clear any pending retry
+    if (historyRetryTimeoutRef.current) {
+      clearTimeout(historyRetryTimeoutRef.current)
+      historyRetryTimeoutRef.current = null
+    }
     
-    // Initial fetch on mount
-    fetchHistory()
+    if (!tableId) {
+      // tableId not available yet, set up retry
+      if (!hasFetchedInitialHistoryRef.current) {
+        if (import.meta.env.DEV) {
+          console.log('⏳ TableId not available yet, will retry history fetch')
+        }
+        historyRetryCountRef.current = 0
+        const maxRetries = 10
+        const retryInterval = 500 // 500ms intervals
+        
+        const retryCheck = () => {
+          const currentTableId = getGameStore.getState().tableId
+          if (currentTableId && !hasFetchedInitialHistoryRef.current) {
+            if (import.meta.env.DEV) {
+              console.log('🔄 Retry: TableId now available, fetching history:', currentTableId)
+            }
+            fetchHistory()
+            hasFetchedInitialHistoryRef.current = true
+            prevTableIdRef.current = currentTableId
+            historyRetryCountRef.current = 0 // Reset retry count on success
+          } else if (historyRetryCountRef.current < maxRetries) {
+            historyRetryCountRef.current++
+            historyRetryTimeoutRef.current = window.setTimeout(retryCheck, retryInterval)
+          } else {
+            if (import.meta.env.DEV) {
+              console.warn('⚠️ Max retries reached, tableId still not available')
+            }
+            historyRetryCountRef.current = 0 // Reset for next attempt
+          }
+        }
+        
+        historyRetryTimeoutRef.current = window.setTimeout(retryCheck, retryInterval)
+      }
+      return
+    }
+    
+    // Check if tableId changed or if this is initial mount
+    const isTableChanged = prevTableIdRef.current !== undefined && prevTableIdRef.current !== tableId
+    const isInitialMount = !hasFetchedInitialHistoryRef.current
+    
+    if (isTableChanged || isInitialMount) {
+      // Check if we have a session - if yes, wait a bit and fetch with authenticated endpoint
+      const sessionId = sessionManager.getSessionId()
+      if (sessionId && isInitialMount) {
+        // If we have session on initial mount, wait a bit to ensure everything is initialized
+        // Then fetch with authenticated endpoint
+        setTimeout(() => {
+          if (import.meta.env.DEV) {
+            console.log('🔄 Initial mount with session, fetching history with authenticated endpoint:', {
+              tableId,
+              hasSession: !!sessionId
+            })
+          }
+          fetchHistory(true) // Force fetch to get authenticated data
+          hasFetchedInitialHistoryRef.current = true
+          prevTableIdRef.current = tableId
+        }, 500)
+      } else {
+        if (import.meta.env.DEV) {
+          console.log('🔄 Fetching game history:', {
+            tableId,
+            isTableChanged,
+            isInitialMount,
+            prevTableId: prevTableIdRef.current,
+            hasSession: !!sessionId
+          })
+        }
+        fetchHistory()
+        hasFetchedInitialHistoryRef.current = true
+        prevTableIdRef.current = tableId
+      }
+    }
+    
+    return () => {
+      if (historyRetryTimeoutRef.current) {
+        clearTimeout(historyRetryTimeoutRef.current)
+        historyRetryTimeoutRef.current = null
+      }
+    }
   }, [tableId, fetchHistory])
+
+  // Listen for session changes to trigger history fetch when login completes
+  useEffect(() => {
+    const handleSessionSet = () => {
+      // When session is set (after login), always fetch history to get authenticated data
+      if (import.meta.env.DEV) {
+        console.log('🔄 Session set event received, fetching history with authenticated endpoint')
+      }
+      
+      // Wait a bit for initialization to complete, then fetch if session is available
+      const checkAndFetch = (attempt: number = 0) => {
+        const maxAttempts = 30 // 3 seconds total (30 * 100ms) - increased for better reliability
+        const sessionId = sessionManager.getSessionId()
+        const currentTableId = getGameStore.getState().tableId
+        
+        if (sessionId && currentTableId) {
+          // Session available and we have tableId - force fetch to bypass throttle and get authenticated data
+          if (import.meta.env.DEV) {
+            console.log('🔄 Session available after login, fetching history with authenticated endpoint:', currentTableId)
+          }
+          // Force fetch to bypass throttle and ensure we get authenticated data
+          fetchHistory(true)
+          hasFetchedInitialHistoryRef.current = true
+          prevTableIdRef.current = currentTableId
+        } else if (attempt < maxAttempts) {
+          // Retry after a short delay
+          setTimeout(() => checkAndFetch(attempt + 1), 100)
+        } else {
+          if (import.meta.env.DEV) {
+            console.warn('⚠️ Session set but tableId not available after max attempts', {
+              hasSession: !!sessionId,
+              tableId: currentTableId
+            })
+          }
+        }
+      }
+      
+      // Start checking after a short delay to allow initialization to complete
+      setTimeout(() => checkAndFetch(), 300)
+    }
+
+    const handleInitParamChange = (event: any) => {
+      // When URL params change (including session login), fetch history
+      const { changedParams } = event.detail || {}
+      if (changedParams?.sess_id) {
+        if (import.meta.env.DEV) {
+          console.log('🔄 Session ID changed via URL, fetching history with authenticated endpoint')
+        }
+        
+        // Use same retry logic as session_set
+        const checkAndFetch = (attempt: number = 0) => {
+          const maxAttempts = 30 // 3 seconds total - increased for better reliability
+          const sessionId = sessionManager.getSessionId()
+          const currentTableId = getGameStore.getState().tableId
+          
+          if (sessionId && currentTableId) {
+            if (import.meta.env.DEV) {
+              console.log('🔄 Session available after initparamchange, fetching history:', currentTableId)
+            }
+            fetchHistory(true) // Force fetch after session change
+            hasFetchedInitialHistoryRef.current = true
+            prevTableIdRef.current = currentTableId
+          } else if (attempt < maxAttempts) {
+            setTimeout(() => checkAndFetch(attempt + 1), 100)
+          }
+        }
+        
+        setTimeout(() => checkAndFetch(), 300) // Slightly longer delay for initparamchange
+      }
+    }
+
+    window.addEventListener('session_set', handleSessionSet)
+    window.addEventListener('initparamchange', handleInitParamChange as EventListener)
+    
+    return () => {
+      window.removeEventListener('session_set', handleSessionSet)
+      window.removeEventListener('initparamchange', handleInitParamChange as EventListener)
+    }
+  }, [fetchHistory])
 
   // Fetch history when game result comes (round settles)
   useEffect(() => {
@@ -406,73 +587,302 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
   }, [apiRound, currentRound, history])
 
   /**
-   * Generates Bead Road pattern from history
-   * Rules (Bead Road / 大路):
-   * - Red ring = Meron win
-   * - Blue ring = Wala win  
-   * - Green ring = Draw
-   * - Same consecutive result = stack vertically (same column)
-   * - Different result (Meron/Wala) = new column (horizontal)
-   * - Draw result = continue vertically in same column (does NOT create new column)
-   * - When column is full (6 rows), continue in next column
-   * - Oldest results appear on the right, newest on the left
-   * - History should be processed from oldest to newest (left to right)
+   * Internal status code derived from tablestatus / roundStatus.
+   * Used both for styling and for translated labels.
+   */
+  const statusCode = useMemo(() => {
+    if (isLive === false) return 'maintenance'
+
+    if (typeof tableStatus === 'number') {
+      switch (tableStatus) {
+        case 0:
+          return 'no-fight-now'
+        case 1:
+          return 'betting'
+        case 2:
+          return 'fighting'
+        case 3:
+          return 'settling'
+        case 4:
+          return 'waiting'
+        case 5:
+          return 'canceled'
+        default:
+          break
+      }
+    }
+
+    if (roundStatus === 1) return 'betting'
+    if (roundStatus === 2) return 'fighting'
+    if (roundStatus === 4) return 'settling'
+    if (roundStatus === 0) return 'waiting'
+
+    return ''
+  }, [isLive, tableStatus, roundStatus])
+
+  /**
+   * Translated status label for current language.
+   */
+  const statusText = useMemo(() => {
+    switch (statusCode) {
+      case 'betting':
+        return t('gameSummary.status.betting')
+      case 'fighting':
+        return t('gameSummary.status.fighting')
+      case 'waiting':
+      case 'no-fight-now':
+        return t('gameSummary.status.waiting')
+      case 'settling':
+        return t('gameSummary.status.settled')
+      case 'maintenance':
+        return t('gameSummary.status.maintenance')
+      case 'canceled':
+        // No dedicated i18n key; treat as settled for now
+        return t('gameSummary.status.settled')
+      default:
+        return ''
+    }
+  }, [statusCode, t])
+
+  /**
+   * Generates road (大路) pattern from history
+   * 參考 /scoreplate.html 的規則：
+   * - M/W 會落子成一格（紅/藍）
+   * - D（和局）不落新格，只在「最後一格」疊加 tie 記號
+   * - 同色：優先往下；若不能往下則右轉，並設定 pendingOrigin（右轉起點）
+   * - pendingOrigin 存在時：同色「永遠往右」(不再嘗試往下)
+   * - 異色：若 pendingOrigin 存在，優先回到 origin 同欄的 origin.r+1 往下找空位；成功後清掉 pendingOrigin
    */
   const generateBeadRoad = useMemo((): BeadRoadItem[] => {
     if (history.length === 0) return []
 
-    const beadRoad: BeadRoadItem[] = []
-    let currentCol = 0
-    let currentRow = 0
-    let lastResult: 'meron' | 'wala' | 'draw' | null = null
+    type Token = 'M' | 'W' | 'D'
+    type Pos = { c: number; r: number }
+    type Cell = {
+      result: 'meron' | 'wala'
+      round: number
+      col: number
+      row: number
+      tieCount: number
+      tieRounds: number[]
+    }
 
-    // Process history from oldest to newest (left to right in display)
-    // History array is already in chronological order (oldest first)
-    history.forEach((item) => {
-      const result = item.result
+    const ROWS = GRID_CONFIG.ROWS
+    // 需要一個合理上限避免無窮 while；一般來說 cols 不會超過局數太多
+    const COLS = Math.max(GRID_CONFIG.MAX_COLS, history.length + 30)
 
-      if (lastResult === null) {
-        // First result - start at column 0, row 0
-        currentCol = 0
-        currentRow = 0
-      } else if (result === 'draw') {
-        // Draw result - continue vertically in same column (do NOT create new column)
-        currentRow++
-        
-        // If column is full (6 rows), move to next column
-        if (currentRow >= GRID_CONFIG.ROWS) {
-          currentCol++
-          currentRow = 0
-        }
-      } else if (result === lastResult) {
-        // Same result as previous (and not draw) - stack vertically (same column)
-        currentRow++
-        
-        // If column is full (6 rows), move to next column
-        if (currentRow >= GRID_CONFIG.ROWS) {
-          currentCol++
-          currentRow = 0
-        }
-      } else {
-        // Different result (Meron/Wala) - new column (move right)
-        // Only create new column if it's a different Meron/Wala result
-        // (Draw already handled above)
-        currentCol++
-        currentRow = 0
+    const keyOf = (c: number, r: number) => `${c}:${r}`
+    const grid = new Map<string, Cell>()
+
+    const isEmpty = (c: number, r: number) => c >= 0 && c < COLS && r >= 0 && r < ROWS && !grid.has(keyOf(c, r))
+    const findFirstEmptyRowInCol = (c: number, start: number = 0) => {
+      if (c < 0 || c >= COLS) return null
+      for (let r = start; r < ROWS; r++) {
+        if (isEmpty(c, r)) return r
+      }
+      return null
+    }
+
+    let lastVal: Token | null = null
+    let lastPos: Pos | null = null
+    let pendingOrigin: Pos | null = null
+
+    const placeAt = (c: number, r: number, val: Exclude<Token, 'D'>, round: number): Pos | null => {
+      if (c < 0 || c >= COLS || r < 0 || r >= ROWS) return null
+      const cell: Cell = {
+        result: val === 'M' ? 'meron' : 'wala',
+        round,
+        col: c,
+        row: r,
+        tieCount: 0,
+        tieRounds: [],
+      }
+      grid.set(keyOf(c, r), cell)
+      return { c, r }
+    }
+
+    const setLast = (pos: Pos | null, val: Exclude<Token, 'D'>) => {
+      if (!pos) return
+      lastVal = val
+      lastPos = pos
+    }
+
+    const markTieOnLast = (round: number) => {
+      if (!lastPos) return
+      const cell = grid.get(keyOf(lastPos.c, lastPos.r))
+      if (!cell) return
+      cell.tieCount += 1
+      cell.tieRounds.push(round)
+    }
+
+    const toToken = (result: GameHistoryType['result']): Token => {
+      if (result === 'meron') return 'M'
+      if (result === 'wala') return 'W'
+      return 'D'
+    }
+
+    // 保險：確保用回合數由小到大處理（oldest -> newest）
+    const ordered = [...history].sort((a, b) => (a.round ?? 0) - (b.round ?? 0))
+
+    for (const item of ordered) {
+      const token = toToken(item.result)
+
+      if (token === 'D') {
+        markTieOnLast(item.round)
+        continue
       }
 
-      beadRoad.push({
-        result,
-        round: item.round,
-        col: currentCol,
-        row: currentRow
-      })
+      // first non-draw
+      if (lastVal === null || lastPos === null) {
+        setLast(placeAt(0, 0, token, item.round), token)
+        continue
+      }
+      // 固化本回合用的座標，避免後續收斂/重指派影響
+      const lp: Pos = lastPos
 
-      lastResult = result
-    })
+      // CASE: same color
+      if (token === lastVal) {
+        // right-mode: ALWAYS go right, not down
+        if (pendingOrigin) {
+          let tryC = lp.c + 1
+          let placed = false
+          while (tryC < COLS) {
+            if (isEmpty(tryC, lp.r)) {
+              setLast(placeAt(tryC, lp.r, token, item.round), token)
+              placed = true
+              break
+            }
+            const fe = findFirstEmptyRowInCol(tryC, 0)
+            if (fe !== null) {
+              setLast(placeAt(tryC, fe, token, item.round), token)
+              placed = true
+              break
+            }
+            tryC++
+          }
+          if (!placed) {
+            setLast(placeAt(COLS - 1, 0, token, item.round), token)
+          }
+          continue
+        }
 
-    // Reverse so newest appears on the left (for display)
-    return beadRoad.reverse()
+        // normal: try down else right-turn
+        const rBelow = lp.r + 1
+        if (rBelow < ROWS && isEmpty(lp.c, rBelow)) {
+          setLast(placeAt(lp.c, rBelow, token, item.round), token)
+          continue
+        }
+
+        // right-turn: set pendingOrigin only if none exists
+        if (pendingOrigin === null) pendingOrigin = { c: lp.c, r: lp.r }
+
+        // place rightwards prefer same row
+        let placed = false
+        let tryC = lp.c + 1
+        while (tryC < COLS) {
+          if (isEmpty(tryC, lp.r)) {
+            setLast(placeAt(tryC, lp.r, token, item.round), token)
+            placed = true
+            break
+          }
+          const fe = findFirstEmptyRowInCol(tryC, 0)
+          if (fe !== null) {
+            setLast(placeAt(tryC, fe, token, item.round), token)
+            placed = true
+            break
+          }
+          tryC++
+        }
+        if (!placed) {
+          setLast(placeAt(COLS - 1, 0, token, item.round), token)
+        }
+        continue
+      }
+
+      // CASE: different color
+      if (pendingOrigin) {
+        const oc = pendingOrigin.c
+        const orow = pendingOrigin.r
+        let placed = false
+
+        const startR = orow + 1
+        if (startR < ROWS) {
+          for (let r = startR; r < ROWS; r++) {
+            if (isEmpty(oc, r)) {
+              setLast(placeAt(oc, r, token, item.round), token)
+              placed = true
+              break
+            }
+          }
+        } else {
+          // origin 下一列超底 -> 回補到 origin.c+1 從 top-first-empty
+          let tryC = oc + 1
+          while (tryC < COLS) {
+            const fe = findFirstEmptyRowInCol(tryC, 0)
+            if (fe !== null) {
+              setLast(placeAt(tryC, fe, token, item.round), token)
+              placed = true
+              break
+            }
+            tryC++
+          }
+        }
+
+        if (!placed) {
+          // 若 origin 欄從 startR..ROWS-1 全滿，則嘗試從 origin.c+1 往右找 top-first-empty
+          let tryC = oc + 1
+          while (tryC < COLS) {
+            const fe = findFirstEmptyRowInCol(tryC, 0)
+            if (fe !== null) {
+              setLast(placeAt(tryC, fe, token, item.round), token)
+              placed = true
+              break
+            }
+            tryC++
+          }
+        }
+
+        if (!placed) {
+          // 最後 fallback：從 lastPos 右邊起找第一個可放
+          let newC = lp.c + 1
+          while (newC < COLS) {
+            const rr = findFirstEmptyRowInCol(newC, 0)
+            if (rr !== null) {
+              setLast(placeAt(newC, rr, token, item.round), token)
+              placed = true
+              break
+            }
+            newC++
+          }
+          if (!placed) {
+            setLast(placeAt(COLS - 1, 0, token, item.round), token)
+          }
+        }
+
+        // consume pendingOrigin
+        pendingOrigin = null
+        continue
+      }
+
+      // no pending -> normal next-col top-first-empty
+      let newC = lp.c + 1
+      let placed = false
+      while (newC < COLS) {
+        const rr = findFirstEmptyRowInCol(newC, 0)
+        if (rr !== null) {
+          setLast(placeAt(newC, rr, token, item.round), token)
+          placed = true
+          break
+        }
+        newC++
+      }
+      if (!placed) {
+        setLast(placeAt(COLS - 1, 0, token, item.round), token)
+      }
+    }
+
+    // 轉成陣列，固定排序（由左到右、由上到下）方便 render / key 穩定
+    return [...grid.values()].sort((a, b) => a.col - b.col || a.row - b.row)
   }, [history])
 
   /**
@@ -487,14 +897,31 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
   }, [generateBeadRoad])
 
   /**
-   * Auto-scroll to show newest results (leftmost columns after reversal)
+   * Auto-scroll to show newest results (rightmost position)
+   * Scrolls to rightmost side when entering table or when history updates
    */
   useEffect(() => {
     if (roadmapContainerRef.current && generateBeadRoad.length > 0) {
-      // Scroll to the left to show newest results (they're now on the left)
-      roadmapContainerRef.current.scrollLeft = 0
+      // Use setTimeout to ensure DOM is fully rendered before scrolling
+      setTimeout(() => {
+        if (roadmapContainerRef.current) {
+          // Scroll to the rightmost position to show newest results
+          const container = roadmapContainerRef.current
+          const maxScroll = container.scrollWidth - container.clientWidth
+          container.scrollLeft = maxScroll
+          
+          if (import.meta.env.DEV) {
+            console.log('📜 Scrolled roadmap to rightmost position:', {
+              scrollLeft: container.scrollLeft,
+              maxScroll,
+              scrollWidth: container.scrollWidth,
+              clientWidth: container.clientWidth
+            })
+          }
+        }
+      }, 100)
     }
-  }, [generateBeadRoad])
+  }, [generateBeadRoad, tableId])
 
   /**
    * Get CSS class for result color
@@ -529,9 +956,10 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
                   gridRow: item.row + 1,
                   gridColumn: item.col + 1
                 }}
-                title={`Round ${item.round}: ${item.result.toUpperCase()}`}
+                title={`Round ${item.round}: ${item.result.toUpperCase()}${item.tieCount ? ` + D×${item.tieCount}` : ''}`}
               >
                 <div className="bead-ring" />
+                {item.tieCount > 0 && <div className="bead-tie-mark" aria-label={`Tie x ${item.tieCount}`} />}
               </div>
             ))}
           </div>
@@ -555,13 +983,19 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
             </div>
           </div>
           <div className="status-right">
+            {statusCode && statusText && (
+              <div className="status-badge">
+                <span className={`status-dot ${statusCode}`} />
+                <span className="status-text">{statusText}</span>
+              </div>
+            )}
             <button
               onClick={toggleGameSummary}
               className="summary-toggle-btn"
               title="Switch to Game Summary"
             >
-              <img src="/home.svg" alt="Home" className="info-icon" />
-              <span className="lobby-text">Lobby</span>
+              <img src="./home.svg" alt="Home" className="info-icon" />
+              <span className="lobby-text">{t('gameHistory.arena')}</span>
             </button>
           </div>
         </div>
@@ -601,8 +1035,8 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
             gridTemplateColumns: `repeat(${Math.min(maxColumn, 12)}, 1fr)`,
           }}
         >
-          {/* Render bead road items - show first 72 results max (6 rows x 12 cols) - newest on left */}
-          {generateBeadRoad.slice(0, 72).map((item, index) => (
+          {/* Render bead road items - show first 72 results max (6 rows x 12 cols) - newest on right */}
+          {generateBeadRoad.slice(Math.max(0, generateBeadRoad.length - 72)).map((item, index) => (
             <div
               key={`simple-bead-${index}`}
               className={`bead-item-simple ${getBeadColor(item.result)}`}
@@ -610,9 +1044,10 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
                 gridRow: item.row + 1,
                 gridColumn: (item.col % 12) + 1
               }}
-              title={`Round ${item.round}: ${item.result.toUpperCase()}`}
+              title={`Round ${item.round}: ${item.result.toUpperCase()}${item.tieCount ? ` + D×${item.tieCount}` : ''}`}
             >
               <div className="bead-ring-simple" />
+              {item.tieCount > 0 && <div className="bead-tie-mark bead-tie-mark--simple" aria-label={`Tie x ${item.tieCount}`} />}
             </div>
           ))}
         </div>

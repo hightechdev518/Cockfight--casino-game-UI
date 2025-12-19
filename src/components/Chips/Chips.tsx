@@ -10,11 +10,24 @@ const CHIP_VALUES = [1, 5, 10, 20, 50, 100, 200, 500, 1000, 5000, 10000, 50000] 
 /**
  * Gets chip SVG path from public folder
  */
-const getChipSVG = (value: number) => `/${value}.svg`
+const getChipSVG = (value: number) => `./${value}.svg`
 
 const Chips: React.FC = () => {
-  const { selectedChip, setSelectedChip, betLimitMin, betLimitMax } = useGameStore()
+  const { selectedChip, setSelectedChip, betLimitMin, betLimitMax, roundStatus, countdown } = useGameStore()
   const [expanded, setExpanded] = useState(false)
+
+  /**
+   * Checks if betting time is active
+   * @returns true if betting is allowed, false otherwise
+   */
+  const isBettingTime = (): boolean => {
+    // Betting is allowed when roundStatus === 1 (betting open) AND countdown > 0
+    // If values are undefined, we should be conservative and disable betting
+    if (roundStatus === undefined || countdown === undefined) {
+      return false
+    }
+    return roundStatus === 1 && countdown > 0
+  }
 
   /**
    * Checks if a chip value is within bet limits
@@ -22,8 +35,13 @@ const Chips: React.FC = () => {
    * @returns true if chip is valid, false if outside limits
    * Note: We allow chips below minimum bet limit because users can place multiple bets
    * The actual validation happens when placing the bet, not when selecting the chip
+   * Chips 1 and 5 are always available in all cases
    */
   const isChipValid = (value: number): boolean => {
+    // Chips 1 and 5 are always available in all cases, all the time
+    if (value === 1 || value === 5) {
+      return true
+    }
     // Only check maximum limit - allow chips below minimum (user can place multiple bets)
     if (betLimitMax !== undefined && value > betLimitMax) {
       return false
@@ -32,6 +50,10 @@ const Chips: React.FC = () => {
   }
 
   const handleChipSelect = (value: number) => {
+    // Only allow selection during betting time
+    if (!isBettingTime()) {
+      return
+    }
     // Only allow selection if chip is within bet limits
     if (!isChipValid(value)) {
       return
@@ -50,10 +72,13 @@ const Chips: React.FC = () => {
       {/* --- COLLAPSED MODE: Show only selected chip --- */}
       {!expanded && (
         <button
-          className="chip selected"
+          className={`chip selected ${!isBettingTime() ? 'disabled' : ''}`}
           onClick={toggleExpand}
           aria-label="Show all chips"
+          aria-disabled={!isBettingTime()}
+          disabled={!isBettingTime()}
           type="button"
+          title={!isBettingTime() ? 'Betting is not available at this time' : undefined}
         >
           <div className="chip-inner">
             <img
@@ -71,17 +96,19 @@ const Chips: React.FC = () => {
           CHIP_VALUES.map((value) => {
             const isSelected = selectedChip === value
             const isValid = isChipValid(value)
+            const isBettingActive = isBettingTime()
+            const isDisabled = !isValid || !isBettingActive
             return (
               <button
                 key={value}
-                className={`chip ${isSelected ? 'selected' : ''} ${!isValid ? 'disabled' : ''}`}
+                className={`chip ${isSelected ? 'selected' : ''} ${isDisabled ? 'disabled' : ''}`}
                 onClick={() => handleChipSelect(value)}
-                aria-label={`Select chip ${value}${!isValid ? ' (outside bet limit)' : ''}`}
+                aria-label={`Select chip ${value}${!isValid ? ' (outside bet limit)' : !isBettingActive ? ' (betting not available)' : ''}`}
                 aria-pressed={isSelected}
-                aria-disabled={!isValid}
-                disabled={!isValid}
+                aria-disabled={isDisabled}
+                disabled={isDisabled}
                 type="button"
-                title={!isValid ? `Chip value ${value} is outside bet limit range${betLimitMin !== undefined && betLimitMax !== undefined ? ` (${betLimitMin} - ${betLimitMax})` : ''}` : undefined}
+                title={!isBettingActive ? 'Betting is not available at this time' : !isValid ? `Chip value ${value} is outside bet limit range${betLimitMin !== undefined && betLimitMax !== undefined ? ` (${betLimitMin} - ${betLimitMax})` : ''}` : undefined}
               >
                 <div className="chip-inner">
                   <img

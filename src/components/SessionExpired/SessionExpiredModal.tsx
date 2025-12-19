@@ -1,5 +1,6 @@
 import React from 'react'
 import './SessionExpiredModal.css'
+import { useI18n } from '../../i18n/LanguageContext'
 
 interface SessionExpiredModalProps {
   isOpen: boolean
@@ -7,6 +8,7 @@ interface SessionExpiredModalProps {
 }
 
 const SessionExpiredModal: React.FC<SessionExpiredModalProps> = ({ isOpen, onGoToHome }) => {
+  const { t } = useI18n()
   if (!isOpen) return null
 
   return (
@@ -14,16 +16,13 @@ const SessionExpiredModal: React.FC<SessionExpiredModalProps> = ({ isOpen, onGoT
       <div className="session-expired-modal">
         <div className="session-expired-content">
           <p className="session-expired-message">
-            Your login has<br />
-            expired or been<br />
-            kicked out, please<br />
-            log in again
+            {t('sessionExpired.message')}
           </p>
           <button 
             className="session-expired-button"
             onClick={onGoToHome}
           >
-            Go to Home
+            {t('sessionExpired.goHome')}
           </button>
         </div>
       </div>

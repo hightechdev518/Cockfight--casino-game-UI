@@ -20,9 +20,9 @@
 .settings-modal {
   background: linear-gradient(135deg, rgba(26, 26, 46, 0.95) 0%, rgba(22, 33, 62, 0.95) 100%);
   border-radius: 12px;
-  width: 90%;
-  max-width: 600px;
-  max-height: 80vh;
+  width: 92%;
+  max-width: 720px;
+  max-height: 90vh;
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
@@ -199,7 +199,7 @@
 /* Language Selection Styles */
 .settings-language-section {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 20px;
   padding: 20px 0;
 }
@@ -214,7 +214,7 @@
 .settings-language-dropdown-container {
   position: relative;
   flex: 1;
-  max-width: 300px;
+  max-width: none;
 }
 
 .settings-language-dropdown {
@@ -255,17 +255,15 @@
 }
 
 .settings-language-dropdown-menu {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  right: 0;
+  position: static;
+  margin-top: 12px;
   background: linear-gradient(135deg, rgba(26, 26, 46, 0.98) 0%, rgba(22, 33, 62, 0.98) 100%);
   border: 2px solid rgba(255, 215, 0, 0.5);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-  z-index: 1000;
-  max-height: 300px;
-  overflow-y: auto;
+  z-index: 1;
+  max-height: none;
+  overflow: visible;
   display: flex;
   flex-direction: column;
 }

@@ -71,6 +71,15 @@ export const LANGUAGES: Language[] = [
 ]
 
 /**
+ * Apply language metadata to the document (html lang attribute)
+ */
+export const applyLanguageToDocument = (languageCode: LanguageCode) => {
+  if (typeof document === 'undefined') return
+  document.documentElement.lang = languageCode
+  document.documentElement.setAttribute('data-language', languageCode)
+}
+
+/**
  * Get current language from localStorage or URL
  */
 export const getCurrentLanguage = (): LanguageCode => {
@@ -101,6 +110,7 @@ export const setLanguage = (languageCode: LanguageCode): void => {
   
   // Store in localStorage
   localStorage.setItem('app_language', languageCode)
+  applyLanguageToDocument(languageCode)
   
   // Update URL parameter
   const url = new URL(window.location.href)
@@ -112,10 +122,6 @@ export const setLanguage = (languageCode: LanguageCode): void => {
   window.dispatchEvent(new CustomEvent('languageChanged', { 
     detail: { language: languageCode } 
   }))
-  
-  if (import.meta.env.DEV) {
-    console.log('🌐 Language changed to:', languageCode)
-  }
 }
 
 /**

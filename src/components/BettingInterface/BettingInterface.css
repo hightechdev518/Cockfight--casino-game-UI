@@ -863,52 +863,45 @@
     display: flex !important;
     flex-direction: row !important;
     align-items: center !important;
-    justify-content: space-between !important;
-    padding: 0.5rem 1rem !important;
-    gap: 0.75rem !important;
-    min-height: auto !important;
+    justify-content: center !important;
+    padding: 0.75rem 1.25rem !important;
+    gap: 0 !important;
+    min-height: 70px !important;
     height: auto !important;
     width: 100% !important;
     background: rgba(60, 60, 60, 0.95) !important;
     border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
     flex: none !important;
+    box-sizing: border-box !important;
   }
 
+  /* In PC mode, the account info is shown inside the controls row,
+     so hide the separate black bar at the very bottom. */
   .control-bar-bottom {
-    display: flex !important;
-    flex-direction: row !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    padding: 0.5rem 1rem !important;
-    width: 100% !important;
-    background: rgba(0, 0, 0, 0.95) !important;
-    border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
-    min-height: auto !important;
-    height: auto !important;
+    display: none !important;
   }
 
-  /* Reset betting area padding for desktop (no need to make room for side bar) */
+  /* Reset betting area padding for desktop - make it a grid to contain all three buttons in one row */
   .betting-area {
     padding-left: 0.6rem !important;
-    display: flex !important;
-    flex-direction: column !important;
-    grid-template-columns: none !important;
+    display: grid !important;
+    grid-template-columns: 1fr 1fr 1fr !important;
+    gap: 0.25rem !important;
+    align-items: stretch !important;
   }
 
-  /* Reset main bets layout for desktop */
+  /* Reset main bets layout for desktop - all three in one row */
   .main-bets-top {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
+    display: contents !important;
     gap: 0.25rem !important;
     flex: 1 !important;
   }
 
   .main-bets-bottom {
-    display: grid !important;
-    grid-template-columns: 1fr !important;
+    display: contents !important;
     gap: 0.25rem !important;
     flex: 1 !important;
-    margin: 0.2rem 0 !important;
+    margin: 0 !important;
   }
 
   /* Reset main bet button styles for desktop - vertical layout like mobile */
@@ -924,10 +917,17 @@
     gap: 0 !important;
   }
 
-  .main-bet.meron,
-  .main-bet.draw,
+  /* Order buttons in PC mode: Meron (left) | Draw (center) | Wala (right) */
+  .main-bet.meron {
+    order: 1 !important;
+  }
+
+  .main-bet.draw {
+    order: 2 !important;
+  }
+
   .main-bet.wala {
-    order: 0 !important;
+    order: 3 !important;
   }
 
   .bet-label-large {
@@ -966,40 +966,45 @@
     line-height: 1 !important;
   }
 
-  /* Reset Draw button for desktop */
+  /* Reset Draw button for desktop - same vertical layout as meron and wala */
   .main-bets-bottom .main-bet.draw {
-    flex-direction: row !important;
-    padding: 0.75rem 1.5rem !important;
+    flex-direction: column !important;
+    padding: 0.75rem 0.6rem !important;
     align-items: center !important;
-    justify-content: space-between !important;
+    justify-content: center !important;
     gap: 0 !important;
-    min-height: auto !important;
-    overflow: visible !important;
+    min-height: 140px !important;
+    overflow: hidden !important;
   }
 
   .main-bets-bottom .main-bet.draw .bet-label-large {
     margin-left: 0 !important;
-    margin-bottom: 0 !important;
-    font-size: 1.8rem !important;
-    order: 3 !important;
-    flex-shrink: 0 !important;
-    white-space: nowrap !important;
+    margin-bottom: 0.2rem !important;
+    font-size: 3rem !important;
+    order: 0 !important;
+    flex: none !important;
+    white-space: normal !important;
   }
 
   .main-bets-bottom .main-bet.draw .bet-odds {
-    order: 1.3 !important;
-    font-size: 1rem !important;
-    margin-right: 1.5rem !important;
-    flex-shrink: 0 !important;
+    order: 0 !important;
+    font-size: 1.7rem !important;
+    margin-right: 0 !important;
+    margin-bottom: 0 !important;
+    flex: none !important;
+    line-height: normal !important;
   }
 
   .main-bets-bottom .main-bet.draw .bet-stats {
-    flex-direction: row !important;
-    gap: 1rem !important;
-    margin-top: 0 !important;
-    justify-content: flex-start !important;
-    flex-shrink: 0 !important;
+    flex-direction: column !important;
+    gap: 0.2rem !important;
+    margin-top: 0.25rem !important;
+    justify-content: center !important;
+    align-items: center !important;
+    flex: none !important;
     width: auto !important;
-    order: 2 !important;
+    order: 0 !important;
+    line-height: normal !important;
+    font-size: 1.3rem !important;
   }
 }

@@ -35,6 +35,27 @@
   background: #000;
 }
 
+/* Maintenance/Waiting overlay - shows waiting.png when table is in maintenance */
+.video-maintenance-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  z-index: 100;
+}
+
+.waiting-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
 /* Loading poster/image */
 .video-loading-poster {
   position: absolute;
@@ -46,7 +67,7 @@
   height: 100%;
   min-width: 100%;
   min-height: 100%;
-  background-image: url('/waiting.png');
+  background-image: url('./waiting.png');
   background-size: 200% 260%;
   background-repeat: no-repeat;
   z-index: 2;
@@ -121,7 +142,7 @@
 .video-overlay-left,
 .video-overlay-top-right {
   position: absolute;
-  z-index: 10;
+  z-index: 101; /* Higher than maintenance overlay (z-index: 100) to ensure menu button is always clickable */
   pointer-events: none;
 }
 

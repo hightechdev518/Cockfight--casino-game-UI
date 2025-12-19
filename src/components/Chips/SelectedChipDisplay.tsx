@@ -4,10 +4,10 @@ import './Chips.css'
 
 const CHIP_VALUES = [1,5,10, 20, 50, 100, 200, 500, 1000, 5000, 10000,50000]
 
-const getChipSVG = (value: number) => `/${value}.svg`
+const getChipSVG = (value: number) => `./${value}.svg`
 
 const Chips: React.FC = () => {
-  const { selectedChip, setSelectedChip } = useGameStore()
+  const { selectedChip, setSelectedChip, roundStatus, countdown } = useGameStore()
   const [expanded, setExpanded] = useState(false) // toggle chip grid
   const [isDesktop, setIsDesktop] = useState(false)
 
@@ -22,17 +22,41 @@ const Chips: React.FC = () => {
     return () => window.removeEventListener('resize', checkDesktop)
   }, [])
 
-  const handleToggle = () => setExpanded((prev) => !prev)
+  /**
+   * Checks if betting time is active
+   * @returns true if betting is allowed, false otherwise
+   */
+  const isBettingTime = (): boolean => {
+    // Betting is allowed when roundStatus === 1 (betting open) AND countdown > 0
+    // If values are undefined, we should be conservative and disable betting
+    if (roundStatus === undefined || countdown === undefined) {
+      return false
+    }
+    return roundStatus === 1 && countdown > 0
+  }
+
+  const handleToggle = () => {
+    // Only allow toggle during betting time
+    if (!isBettingTime()) {
+      return
+    }
+    setExpanded((prev) => !prev)
+  }
 
   const handleSelect = (value: number) => {
+    // Only allow selection during betting time
+    if (!isBettingTime()) {
+      return
+    }
     setSelectedChip(value)
     if (!isDesktop) {
       setExpanded(false) // collapse after selection on mobile only
     }
   }
 
-  // In desktop mode, always show all chips horizontally
+  // In desktop mode, always show all chips horizontally + Arena button
   if (isDesktop) {
+    const isBettingActive = isBettingTime()
     return (
       <div className="chips-container chips-desktop-horizontal">
         <div className="chips-grid chips-grid-desktop">
@@ -41,10 +65,13 @@ const Chips: React.FC = () => {
             return (
               <button
                 key={value}
-                className={`chip ${isSelected ? 'selected' : ''}`}
+                className={`chip ${isSelected ? 'selected' : ''} ${!isBettingActive ? 'disabled' : ''}`}
                 onClick={() => handleSelect(value)}
-                aria-label={`Select chip ${value}`}
+                aria-label={`Select chip ${value}${!isBettingActive ? ' (betting not available)' : ''}`}
+                aria-disabled={!isBettingActive}
+                disabled={!isBettingActive}
                 type="button"
+                title={!isBettingActive ? 'Betting is not available at this time' : undefined}
               >
                 <div className="chip-inner">
                   <img
@@ -62,15 +89,19 @@ const Chips: React.FC = () => {
   }
 
   // Mobile mode - keep existing expand/collapse behavior
+  const isBettingActive = isBettingTime()
   return (
     <div className="chips-container">
       {!expanded ? (
         // Only show selected chip
         <button
-          className="chip selected"
+          className={`chip selected ${!isBettingActive ? 'disabled' : ''}`}
           onClick={handleToggle}
-          aria-label={`Selected chip ${selectedChip || 10}`}
+          aria-label={`Selected chip ${selectedChip || 10}${!isBettingActive ? ' (betting not available)' : ''}`}
+          aria-disabled={!isBettingActive}
+          disabled={!isBettingActive}
           type="button"
+          title={!isBettingActive ? 'Betting is not available at this time' : undefined}
         >
           <div className="chip-inner">
             <img
@@ -88,10 +119,13 @@ const Chips: React.FC = () => {
             return (
               <button
                 key={value}
-                className={`chip ${isSelected ? 'selected' : ''}`}
+                className={`chip ${isSelected ? 'selected' : ''} ${!isBettingActive ? 'disabled' : ''}`}
                 onClick={() => handleSelect(value)}
-                aria-label={`Select chip ${value}`}
+                aria-label={`Select chip ${value}${!isBettingActive ? ' (betting not available)' : ''}`}
+                aria-disabled={!isBettingActive}
+                disabled={!isBettingActive}
                 type="button"
+                title={!isBettingActive ? 'Betting is not available at this time' : undefined}
               >
                 <div className="chip-inner">
                   <img

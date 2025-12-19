@@ -2,7 +2,16 @@ import { useState, useEffect, useCallback } from 'react'
 import { apiService } from '../../services/apiService'
 import { mapBackendToBetType, getBetTypeDisplayName } from '../../utils/betMapping'
 import { sessionManager } from '../../services/apiService'
+import { useI18n } from '../../i18n/LanguageContext'
 import './BettingHistoryModal.css'
+
+// Silence all console output in src/ (requested cleanup)
+const console: Pick<Console, 'log' | 'warn' | 'error' | 'debug'> = {
+  log: () => {},
+  warn: () => {},
+  error: () => {},
+  debug: () => {},
+}
 
 interface BetRecord {
   w_no: string // BetID
@@ -38,6 +47,7 @@ type TabType = 'bet' | 'game'
 const TABLE_IDS = ['CF01', 'CF02', 'CF03', 'CF04', 'CF05', 'CF06']
 
 const BettingHistoryModal: React.FC<BettingHistoryModalProps> = ({ isOpen, onClose }) => {
+  const { t } = useI18n()
   const [activeTab, setActiveTab] = useState<TabType>('bet')
   
   // Bet History state
@@ -267,31 +277,28 @@ const BettingHistoryModal: React.FC<BettingHistoryModalProps> = ({ isOpen, onClo
    */
   const getWinLoseDisplay = (win: string | number | null, status: number): { text: string; isWin: boolean } => {
     if (status === 0) {
-      return { text: 'Pending', isWin: false }
+      return { text: t('history.bet.pending'), isWin: false }
     }
     
     const winAmount = typeof win === 'string' ? parseFloat(win) : (typeof win === 'number' ? win : 0)
     
     if (winAmount > 0) {
-      return { text: `Win ${winAmount.toFixed(2)}`, isWin: true }
+      return { text: `${t('history.bet.win')} ${winAmount.toFixed(2)}`, isWin: true }
     } else if (winAmount === 0) {
-      return { text: 'Draw - Bet Returned', isWin: false }
+      return { text: t('history.bet.drawReturned'), isWin: false }
     } else {
-      return { text: 'Lose', isWin: false }
+      return { text: t('history.bet.lose'), isWin: false }
     }
   }
 
   /**
-   * Formats bet time
+   * Formats bet time (time only, no date)
    */
   const formatBetTime = (betDate: string): string => {
     if (!betDate) return '-'
     try {
       const date = new Date(betDate)
       return date.toLocaleString('en-US', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',
@@ -303,21 +310,18 @@ const BettingHistoryModal: React.FC<BettingHistoryModalProps> = ({ isOpen, onClo
   }
 
   /**
-   * Formats open date for match history
+   * Formats open date for match history (time only, no date)
    */
   const formatOpenDate = (opendate?: string): string => {
     if (!opendate) return '-'
     try {
       const date = new Date(opendate)
       return date.toLocaleString('en-US', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',
         hour12: false
-      }).replace(',', '')
+      })
     } catch {
       return opendate
     }
@@ -350,13 +354,6 @@ const BettingHistoryModal: React.FC<BettingHistoryModalProps> = ({ isOpen, onClo
     return resultUpper || '-'
   }
 
-  /**
-   * Gets replay URL for a match
-   */
-  const getReplayUrl = (roundId: string | number): string => {
-    // Replay URL format: https://vfile.dk77.bet/<round>.mp4
-    return `https://vfile.dk77.bet/${roundId}.mp4`
-  }
 
   if (!isOpen) return null
 
@@ -366,7 +363,7 @@ const BettingHistoryModal: React.FC<BettingHistoryModalProps> = ({ isOpen, onClo
         {/* Header */}
         <div className="betting-history-modal-header">
           <h2 className="betting-history-modal-title">
-            {activeTab === 'bet' ? 'Betting History' : 'Match History'}
+            {activeTab === 'bet' ? t('history.modal.title.bet') : t('history.modal.title.game')}
           </h2>
           <button 
             className="betting-history-modal-close"
@@ -383,13 +380,13 @@ const BettingHistoryModal: React.FC<BettingHistoryModalProps> = ({ isOpen, onClo
             className={`betting-history-tab ${activeTab === 'bet' ? 'active' : ''}`}
             onClick={() => setActiveTab('bet')}
           >
-            Bet History
+            {t('history.tabs.bet')}
           </button>
           <button
             className={`betting-history-tab ${activeTab === 'game' ? 'active' : ''}`}
             onClick={() => setActiveTab('game')}
           >
-            Game History
+            {t('history.tabs.game')}
           </button>
         </div>
 
@@ -398,7 +395,9 @@ const BettingHistoryModal: React.FC<BettingHistoryModalProps> = ({ isOpen, onClo
           <>
             {/* Date Filter */}
             <div className="betting-history-filter">
-              <label htmlFor="date-filter" className="filter-label">Date:</label>
+              <label htmlFor="date-filter" className="filter-label">
+                {t('history.filter.date')}:
+              </label>
               <input
                 id="date-filter"
                 type="date"
@@ -418,7 +417,7 @@ const BettingHistoryModal: React.FC<BettingHistoryModalProps> = ({ isOpen, onClo
               {betLoading && (
                 <div className="betting-history-loading">
                   <div className="loading-spinner"></div>
-                  <p>Loading betting history...</p>
+                  <p>{t('history.bet.loading')}</p>
                 </div>
               )}
 
@@ -430,7 +429,7 @@ const BettingHistoryModal: React.FC<BettingHistoryModalProps> = ({ isOpen, onClo
 
               {!betLoading && !betError && bets.length === 0 && (
                 <div className="betting-history-empty">
-                  <p>No betting records found for this date.</p>
+                  <p>{t('history.bet.empty')}</p>
                 </div>
               )}
 
@@ -439,28 +438,28 @@ const BettingHistoryModal: React.FC<BettingHistoryModalProps> = ({ isOpen, onClo
                   <table className="betting-history-table">
                     <thead>
                       <tr>
-                        <th>BetID</th>
-                        <th>Arena</th>
-                        <th>Bet Option</th>
-                        <th>Win/Lose</th>
-                        <th>Valid Bet</th>
-                        <th>Bet Time</th>
+                        <th>{t('history.bet.columns.betId')}</th>
+                        <th>{t('history.bet.columns.arena')}</th>
+                        <th>{t('history.bet.columns.betOption')}</th>
+                        <th>{t('history.bet.columns.bet')}</th>
+                        <th>{t('history.bet.columns.winLose')}</th>
+                        <th>{t('history.bet.columns.betTime')}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {bets.map((bet) => {
                         const winLose = getWinLoseDisplay(bet.w_win, bet.w_status)
-                        const validBet = typeof bet.w_bet === 'string' ? parseFloat(bet.w_bet) : (bet.w_bet || 0)
+                        const betAmount = typeof bet.w_bet === 'string' ? parseFloat(bet.w_bet) : (bet.w_bet || 0)
                         
                         return (
                           <tr key={bet.w_no}>
                             <td>{bet.w_no}</td>
                             <td>{bet.w_t_id || '-'}</td>
                             <td>{getBetOptionDisplay(bet.w_bettype, bet.w_betzone)}</td>
+                            <td>{betAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                             <td className={winLose.isWin ? 'win' : winLose.text === 'Lose' ? 'lose' : ''}>
                               {winLose.text}
                             </td>
-                            <td>{validBet.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                             <td>{formatBetTime(bet.w_betdate)}</td>
                           </tr>
                         )
@@ -478,7 +477,9 @@ const BettingHistoryModal: React.FC<BettingHistoryModalProps> = ({ isOpen, onClo
           <>
             {/* Filters */}
             <div className="betting-history-filter">
-              <label htmlFor="game-date-filter" className="filter-label">Date:</label>
+              <label htmlFor="game-date-filter" className="filter-label">
+                {t('history.filter.date')}:
+              </label>
               <input
                 id="game-date-filter"
                 type="date"
@@ -499,7 +500,7 @@ const BettingHistoryModal: React.FC<BettingHistoryModalProps> = ({ isOpen, onClo
                 className={`arena-filter-button ${selectedArena === 'all' ? 'active' : ''}`}
                 onClick={() => handleArenaChange('all')}
               >
-                All Arenas
+                {t('history.filter.allArenas')}
               </button>
               {TABLE_IDS.map((tableId) => (
                 <button
@@ -517,7 +518,7 @@ const BettingHistoryModal: React.FC<BettingHistoryModalProps> = ({ isOpen, onClo
               {gameLoading && (
                 <div className="betting-history-loading">
                   <div className="loading-spinner"></div>
-                  <p>Loading match history...</p>
+                  <p>{t('history.game.loading')}</p>
                 </div>
               )}
 
@@ -529,7 +530,7 @@ const BettingHistoryModal: React.FC<BettingHistoryModalProps> = ({ isOpen, onClo
 
               {!gameLoading && !gameError && matches.length === 0 && (
                 <div className="betting-history-empty">
-                  <p>No match records found for this date and arena.</p>
+                  <p>{t('history.game.empty')}</p>
                 </div>
               )}
 
@@ -538,12 +539,11 @@ const BettingHistoryModal: React.FC<BettingHistoryModalProps> = ({ isOpen, onClo
                   <table className="betting-history-table">
                     <thead>
                       <tr>
-                        <th>#</th>
-                        <th>Match</th>
-                        <th>Round No</th>
-                        <th>Open Date</th>
-                        <th>Winner</th>
-                        <th>Replay</th>
+                        <th>{t('history.game.columns.index')}</th>
+                        <th>{t('history.game.columns.match')}</th>
+                        <th>{t('history.game.columns.roundNo')}</th>
+                        <th>{t('history.game.columns.openDate')}</th>
+                        <th>{t('history.game.columns.winner')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -551,7 +551,6 @@ const BettingHistoryModal: React.FC<BettingHistoryModalProps> = ({ isOpen, onClo
                         const roundId = match.trid || match.r_id || match.round_no || '-'
                         const openDate = match.opendate || match.r_opendate || match.date
                         const winner = getWinner(match)
-                        const replayUrl = getReplayUrl(String(roundId))
                         
                         return (
                           <tr key={`${match.tableid}-${roundId}-${index}`}>
@@ -560,16 +559,6 @@ const BettingHistoryModal: React.FC<BettingHistoryModalProps> = ({ isOpen, onClo
                             <td>{roundId}</td>
                             <td>{formatOpenDate(openDate)}</td>
                             <td>{winner}</td>
-                            <td>
-                              <a
-                                href={replayUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="replay-link"
-                              >
-                                Replay
-                              </a>
-                            </td>
                           </tr>
                         )
                       })}

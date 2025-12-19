@@ -9,6 +9,15 @@ import { apiService, sessionManager } from '../../services/apiService'
 import { mapBetTypeToBackend, getBetTypeDisplayName, mapBackendToBetType } from '../../utils/betMapping'
 import { shouldThrottle, completeThrottle } from '../../utils/apiThrottle'
 import './BettingInterface.css'
+import { useI18n } from '../../i18n/LanguageContext'
+
+// Silence all console output in src/ (requested cleanup)
+const console: Pick<Console, 'log' | 'warn' | 'error' | 'debug'> = {
+  log: () => {},
+  warn: () => {},
+  error: () => {},
+  debug: () => {},
+}
 
 /**
  * Default betting odds (fallback if API odds not available)
@@ -33,14 +42,19 @@ const DEFAULT_BET_ODDS: Readonly<Record<BetType, number>> = {
  * @returns JSX element
  */
 const BettingInterface: React.FC = () => {
+  const { t } = useI18n()
+  // CRITICAL: Subscribe to roundStatus and isLive separately to ensure reactivity
+  // This ensures the component re-renders when these values change
+  const roundStatus = useGameStore((state) => state.roundStatus)
+  const isLive = useGameStore((state) => state.isLive)
   const { 
     selectedChip, 
     addBet, 
     clearBets, 
     tableId, 
     roundId, 
+    lobbyInfoByTableId,
     currentRound,
-    roundStatus,
     countdown,
     setAccountBalance, 
     setBettingError,
@@ -53,6 +67,8 @@ const BettingInterface: React.FC = () => {
   const [pendingBets, setPendingBets] = useState<Map<BetType, number>>(new Map())
   // Track which bet type is currently active (locked in) - only one panel can be bet at a time
   const [activeBetType, setActiveBetType] = useState<BetType | null>(null)
+  // Track original balance before pending bets (for cancel functionality)
+  const [originalBalanceBeforePending, setOriginalBalanceBeforePending] = useState<number | null>(null)
   const [flyingChips, setFlyingChips] = useState<Array<{
     id: string
     chipValue: number
@@ -70,59 +86,38 @@ const BettingInterface: React.FC = () => {
   const [errorFading, setErrorFading] = useState(false)
   const errorTimerRef = useRef<number | null>(null)
 
+  // Display-only formatting for bet amounts in the betting area (no decimals).
+  // We truncate (not round) to avoid showing a larger amount than actually wagered.
+  const betAmountFormatter = useMemo(() => {
+    return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 })
+  }, [])
+
+  const formatBetAmountNoDecimals = useCallback((amount: number): string => {
+    const safe = Number.isFinite(amount) ? amount : 0
+    return betAmountFormatter.format(Math.trunc(safe))
+  }, [betAmountFormatter])
+
   // Removed restriction: Users can now bet on multiple sides in the same round
   // All bets are properly communicated with the server via API calls
 
-  /**
-   * Constructs r_no format for odds API
-   * Format: YYMMDD + roundId (e.g., "2512091267712" = 251209 + 1267712)
-   * Uses UTC date to match server timezone
-   * If roundId already has date prefix, use it as-is
-   */
-  const constructRNo = useCallback((roundId: string | undefined): string | null => {
-    if (!roundId) return null
-    
-    // If roundId is already in full format (13+ digits), use it as-is
-    if (roundId.length >= 13) {
-      return roundId
-    }
-    
-    // Otherwise, construct it: YYMMDD + roundId
-    // Use UTC+8 timezone to match server timezone (Asia/Shanghai)
-    // Server uses UTC+8, so we need to get the date in that timezone
-    const now = new Date()
-    // Get UTC time in milliseconds
-    const utcTime = now.getTime()
-    // Add 8 hours (8 * 60 * 60 * 1000 ms) to convert to UTC+8
-    const utc8Time = new Date(utcTime + (8 * 60 * 60 * 1000))
-    // Extract date components from UTC+8 time
-    const year = utc8Time.getUTCFullYear().toString().slice(-2) // Last 2 digits of year
-    const month = (utc8Time.getUTCMonth() + 1).toString().padStart(2, '0') // 01-12
-    const day = utc8Time.getUTCDate().toString().padStart(2, '0') // 01-31
-    const datePrefix = `${year}${month}${day}` // YYMMDD format
-    
-    if (import.meta.env.DEV) {
-      console.log('📅 Constructing r_no (UTC+8):', {
-        localDate: now.toLocaleString(),
-        utc8Date: utc8Time.toISOString(),
-        datePrefix,
-        roundId,
-        r_no: `${datePrefix}${roundId}`
-      })
-    }
-    
-    return `${datePrefix}${roundId}`
-  }, [])
+  // r_no for odds.php must come from lobbyinfo.php per-table field "no"
+  const oddsRNo = useMemo(() => {
+    const tableData = (tableId && lobbyInfoByTableId) ? lobbyInfoByTableId[tableId] : undefined
+    const no = tableData?.no
+    if (no === undefined || no === null) return undefined
+    return String(no)
+  }, [lobbyInfoByTableId, tableId])
 
   /**
    * Fetches odds from API for the current round
    * Note: Odds API uses r_no format: YYMMDD + roundId (e.g., "2512091267712")
    * Format: POST /odds.php with form data: sess_id, r_no, uniqueid
+   * @param force - If true, bypass throttle and force fetch
    */
-  const fetchOdds = useCallback(async () => {
-    // Throttle odds fetching - only fetch once per roundId
-    const oddsKey = `odds_${roundId}_${tableId}`
-    if (!shouldThrottle(oddsKey, 5000)) {
+  const fetchOdds = useCallback(async (force: boolean = false) => {
+    // Throttle odds fetching - only fetch once per roundId (increased interval to reduce API calls)
+    const oddsKey = `odds_${oddsRNo}_${tableId}`
+    if (!force && !shouldThrottle(oddsKey, 30000)) { // Increased from 5s to 30s
       if (import.meta.env.DEV) {
         console.debug('⏸️ Throttled odds fetch - already fetched recently for this round')
       }
@@ -147,16 +142,17 @@ const BettingInterface: React.FC = () => {
       return
     }
 
-    // Construct r_no: YYMMDD + roundId format (e.g., "2512091267712")
-    const r_no = constructRNo(roundId)
+    // r_no MUST come from lobbyinfo.php per-table "no" (no fallback)
+    const r_no = oddsRNo
     
     if (!r_no) {
       if (import.meta.env.DEV) {
-        console.error('❌ Cannot fetch odds: No roundId available to construct r_no', { 
+        console.error('❌ Cannot fetch odds: Missing r_no from lobbyinfo (no fallback)', { 
           currentRound, 
           roundId,
+          oddsRNo,
           tableId,
-          'NOTE': 'r_no requires roundId (trid) to construct YYMMDD + roundId format'
+          'NOTE': 'r_no must be lobbyinfo.php per-table field "no"'
         })
       }
       return
@@ -282,7 +278,7 @@ const BettingInterface: React.FC = () => {
         console.warn('⚠️ Using default odds as fallback')
       }
     }
-  }, [roundId, constructRNo, tableId])
+  }, [roundId, oddsRNo, currentRound, tableId])
 
   /**
    * Gets odds for a bet type, using API odds if available, otherwise defaults
@@ -371,46 +367,211 @@ const BettingInterface: React.FC = () => {
 
   // Fetch odds when roundId changes (needed to construct r_no)
   // Track previous roundId to avoid duplicate fetches
+  const prevOddsKeyRef = useRef<string | undefined>(undefined)
   const prevOddsRoundIdRef = useRef<string | undefined>(undefined)
+  const hasFetchedInitialOddsRef = useRef<boolean>(false)
+  const oddsRetryTimeoutRef = useRef<number | null>(null)
+  const oddsRetryCountRef = useRef<number>(0)
   
   useEffect(() => {
+    // Clear any pending retry
+    if (oddsRetryTimeoutRef.current) {
+      clearTimeout(oddsRetryTimeoutRef.current)
+      oddsRetryTimeoutRef.current = null
+    }
+    
     if (import.meta.env.DEV) {
+      const effectiveOddsKey = oddsRNo
       console.log('🔍 Odds fetch effect triggered:', {
+        effectiveOddsKey,
         roundId,
+        oddsRNo,
+        prevOddsKey: prevOddsKeyRef.current,
         prevRoundId: prevOddsRoundIdRef.current,
         hasRoundId: !!roundId,
         roundIdChanged: roundId !== undefined && roundId !== prevOddsRoundIdRef.current,
-        isInitialMount: prevOddsRoundIdRef.current === undefined
+        hasFetchedInitial: hasFetchedInitialOddsRef.current
       })
     }
     
-    // Only fetch if roundId actually changed (needed for r_no construction)
-    if (roundId !== undefined && roundId !== prevOddsRoundIdRef.current) {
+    // Only fetch if effective odds key changed (r_no from lobbyinfo "no"; no fallback)
+    const effectiveOddsKey = oddsRNo
+    if (effectiveOddsKey !== undefined && effectiveOddsKey !== prevOddsKeyRef.current) {
       if (import.meta.env.DEV) {
-        console.log('🔄 RoundId changed, fetching odds:', {
+        console.log('🔄 Odds key changed, fetching odds:', {
+          effectiveOddsKey,
           roundId,
-          prevRoundId: prevOddsRoundIdRef.current
+          oddsRNo,
+          prevOddsKey: prevOddsKeyRef.current
         })
       }
       fetchOdds()
+      prevOddsKeyRef.current = effectiveOddsKey
       prevOddsRoundIdRef.current = roundId
-    } else if (roundId !== undefined && prevOddsRoundIdRef.current === undefined) {
-      // Initial fetch on mount if we have roundId
-      if (import.meta.env.DEV) {
-        console.log('🔄 Initial odds fetch on mount (roundId available):', roundId)
+      hasFetchedInitialOddsRef.current = true
+    } else if (effectiveOddsKey !== undefined && !hasFetchedInitialOddsRef.current) {
+      // Initial fetch on mount if we have an odds key (even if it was already set before mount)
+      // Check if we have a session - if yes, wait a bit and fetch with authenticated endpoint
+      const sessionId = sessionManager.getSessionId()
+      if (sessionId) {
+        // If we have session on initial mount, wait a bit to ensure everything is initialized
+        // Then fetch with authenticated endpoint
+        setTimeout(() => {
+          if (import.meta.env.DEV) {
+            console.log('🔄 Initial mount with session, fetching odds with authenticated endpoint:', {
+              effectiveOddsKey,
+              roundId,
+              oddsRNo,
+              hasSession: !!sessionId
+            })
+          }
+          fetchOdds(true) // Force fetch to get authenticated data
+          prevOddsKeyRef.current = effectiveOddsKey
+          prevOddsRoundIdRef.current = roundId
+          hasFetchedInitialOddsRef.current = true
+        }, 500)
+      } else {
+        if (import.meta.env.DEV) {
+          console.log('🔄 Initial odds fetch on mount (odds key available):', { effectiveOddsKey, roundId, oddsRNo })
+        }
+        fetchOdds()
+        prevOddsKeyRef.current = effectiveOddsKey
+        prevOddsRoundIdRef.current = roundId
+        hasFetchedInitialOddsRef.current = true
       }
-      fetchOdds()
-      prevOddsRoundIdRef.current = roundId
-    } else if (!roundId) {
+    } else if (!effectiveOddsKey && !hasFetchedInitialOddsRef.current) {
+      // Odds key not available yet, but we haven't fetched - set up retry
       if (import.meta.env.DEV) {
-        console.warn('⚠️ Cannot fetch odds: roundId is not available yet', {
-          roundId,
+        console.log('⏳ Odds key not available yet, will retry:', {
+          effectiveOddsKey,
+          oddsRNo,
           currentRound,
           tableId
         })
       }
+      // Retry with multiple attempts in case roundId is set asynchronously
+      oddsRetryCountRef.current = 0
+      const maxRetries = 10
+      const retryInterval = 500 // 500ms intervals
+      
+      const retryCheck = () => {
+        const store = useGameStore.getState()
+        const currentOddsKey = store.lobbyInfoByTableId?.[store.tableId]?.no
+        if (currentOddsKey && !hasFetchedInitialOddsRef.current) {
+          if (import.meta.env.DEV) {
+            console.log('🔄 Retry: Odds key now available, fetching odds:', currentOddsKey)
+          }
+          fetchOdds()
+          prevOddsKeyRef.current = currentOddsKey
+          prevOddsRoundIdRef.current = store.roundId
+          hasFetchedInitialOddsRef.current = true
+          oddsRetryCountRef.current = 0 // Reset retry count on success
+        } else if (oddsRetryCountRef.current < maxRetries) {
+          oddsRetryCountRef.current++
+          oddsRetryTimeoutRef.current = window.setTimeout(retryCheck, retryInterval)
+        } else {
+          if (import.meta.env.DEV) {
+            console.warn('⚠️ Max retries reached, odds key still not available')
+          }
+          oddsRetryCountRef.current = 0 // Reset for next attempt
+        }
+      }
+      
+      oddsRetryTimeoutRef.current = window.setTimeout(retryCheck, retryInterval)
     }
-  }, [roundId, fetchOdds, constructRNo, currentRound, tableId])
+    
+    return () => {
+      if (oddsRetryTimeoutRef.current) {
+        clearTimeout(oddsRetryTimeoutRef.current)
+        oddsRetryTimeoutRef.current = null
+      }
+    }
+  }, [roundId, oddsRNo, fetchOdds, currentRound, tableId])
+
+  // Listen for session changes to trigger odds fetch when login completes
+  useEffect(() => {
+    const handleSessionSet = () => {
+      // When session is set (after login), always fetch odds to get real API data
+      if (import.meta.env.DEV) {
+        console.log('🔄 Session set event received, fetching odds with authenticated endpoint')
+      }
+      
+      // Wait a bit for initialization to complete, then fetch if session is available
+      const checkAndFetch = (attempt: number = 0) => {
+        const maxAttempts = 30 // 3 seconds total (30 * 100ms) - increased for better reliability
+        const sessionId = sessionManager.getSessionId()
+        const currentRoundId = useGameStore.getState().roundId
+        const currentTableId = useGameStore.getState().tableId
+        
+        if (sessionId && (currentRoundId || currentTableId)) {
+          // Session available and we have either roundId or tableId - force fetch to bypass throttle
+          if (import.meta.env.DEV) {
+            console.log('🔄 Session available after login, fetching odds:', { roundId: currentRoundId, tableId: currentTableId })
+          }
+          fetchOdds(true) // Force fetch after login to bypass throttle and get authenticated data
+          hasFetchedInitialOddsRef.current = true
+          if (currentRoundId) {
+            prevOddsRoundIdRef.current = currentRoundId
+          }
+        } else if (attempt < maxAttempts) {
+          // Retry after a short delay
+          setTimeout(() => checkAndFetch(attempt + 1), 100)
+        } else {
+          if (import.meta.env.DEV) {
+            console.warn('⚠️ Session set but roundId/tableId not available after max attempts', {
+              hasSession: !!sessionId,
+              roundId: currentRoundId,
+              tableId: currentTableId
+            })
+          }
+        }
+      }
+      
+      // Start checking after a short delay to allow initialization to complete
+      setTimeout(() => checkAndFetch(), 300)
+    }
+
+    const handleInitParamChange = (event: any) => {
+      // When URL params change (including session login), fetch odds
+      const { changedParams } = event.detail || {}
+      if (changedParams?.sess_id) {
+        if (import.meta.env.DEV) {
+          console.log('🔄 Session ID changed via URL, fetching odds with authenticated endpoint')
+        }
+        
+        // Use same retry logic as session_set
+        const checkAndFetch = (attempt: number = 0) => {
+          const maxAttempts = 30 // 3 seconds total - increased for better reliability
+          const sessionId = sessionManager.getSessionId()
+          const currentRoundId = useGameStore.getState().roundId
+          const currentTableId = useGameStore.getState().tableId
+          
+          if (sessionId && (currentRoundId || currentTableId)) {
+            if (import.meta.env.DEV) {
+              console.log('🔄 Session available after initparamchange, fetching odds:', { roundId: currentRoundId, tableId: currentTableId })
+            }
+            fetchOdds(true) // Force fetch after session change to bypass throttle
+            hasFetchedInitialOddsRef.current = true
+            if (currentRoundId) {
+              prevOddsRoundIdRef.current = currentRoundId
+            }
+          } else if (attempt < maxAttempts) {
+            setTimeout(() => checkAndFetch(attempt + 1), 100)
+          }
+        }
+        
+        setTimeout(() => checkAndFetch(), 300) // Slightly longer delay for initparamchange
+      }
+    }
+
+    window.addEventListener('session_set', handleSessionSet)
+    window.addEventListener('initparamchange', handleInitParamChange as EventListener)
+    
+    return () => {
+      window.removeEventListener('session_set', handleSessionSet)
+      window.removeEventListener('initparamchange', handleInitParamChange as EventListener)
+    }
+  }, [fetchOdds])
 
   // Listen for real-time odds updates from WebSocket 2 (PRIMARY METHOD)
   useEffect(() => {
@@ -451,6 +612,39 @@ const BettingInterface: React.FC = () => {
     }
   }, [tableId])
 
+  // Listen for totalbet odds updates from WebSocket 2 (odds_M / odds_W)
+  // This updates ONLY M/W odds in-place (keeps other zones intact).
+  useEffect(() => {
+    const handleTotalBetOddsUpdate = (event: CustomEvent) => {
+      const { tableId: updateTableId, roundId: updateRoundId, odds_M, odds_W } = event.detail || {}
+
+      const current = useGameStore.getState()
+      const currentTableId = current.tableId
+      const currentRoundId = current.roundId
+      const currentRoundNo = current.currentRound
+
+      const isSameTable = !!(updateTableId && currentTableId && String(updateTableId).toUpperCase() === String(currentTableId).toUpperCase())
+      const isSameRound =
+        (updateRoundId !== undefined && currentRoundId !== undefined && String(updateRoundId) === String(currentRoundId)) ||
+        (updateRoundId !== undefined && currentRoundNo !== undefined && String(updateRoundId) === String(currentRoundNo)) ||
+        (updateRoundId === undefined) // fallback: if sender didn't include roundId, rely on ws-side filtering
+
+      if (!isSameTable || !isSameRound) return
+
+      setOddsMap((prev) => {
+        const next = new Map(prev)
+        if (typeof odds_M === 'number' && Number.isFinite(odds_M)) next.set('M', odds_M)
+        if (typeof odds_W === 'number' && Number.isFinite(odds_W)) next.set('W', odds_W)
+        return next
+      })
+    }
+
+    window.addEventListener('totalbet_odds_update', handleTotalBetOddsUpdate as EventListener)
+    return () => {
+      window.removeEventListener('totalbet_odds_update', handleTotalBetOddsUpdate as EventListener)
+    }
+  }, [])
+
   // Odds are fetched once when roundId changes (handled by the useEffect above)
   // WebSocket 2 provides real-time odds updates, so no periodic polling needed
 
@@ -458,10 +652,22 @@ const BettingInterface: React.FC = () => {
    * Fetches all wagers for the current round from server using wager_rid.php
    * This syncs bets from server to ensure UI matches server state
    */
-  const fetchWagersForRound = useCallback(async (r_id: string | undefined) => {
+  const fetchWagersForRound = useCallback(async (r_id: string | undefined, force: boolean = false) => {
     if (!r_id) {
       if (import.meta.env.DEV) {
         console.warn('⚠️ Cannot fetch wagers: r_id (roundId) is not available')
+      }
+      return
+    }
+
+    // Throttle wager calls to prevent excessive requests
+    const wagerKey = `wager_${r_id}`
+    // NOTE: After placing a bet we may force a sync to reflect server state immediately.
+    // Force mode bypasses the 5s interval but still respects the "pending" (in-flight) protection.
+    const minInterval = force ? 0 : 5000
+    if (!shouldThrottle(wagerKey, minInterval)) {
+      if (import.meta.env.DEV) {
+        console.debug('⏸️ Throttled wager fetch for round:', r_id)
       }
       return
     }
@@ -472,6 +678,7 @@ const BettingInterface: React.FC = () => {
       }
 
       const wagersResponse = await apiService.getWagersByRound(r_id)
+      completeThrottle(wagerKey)
       
       // wager_rid.php returns {code, msg, ts, unsettle, settle} at root level
       // Check both root level and nested data for compatibility
@@ -533,6 +740,7 @@ const BettingInterface: React.FC = () => {
         }
       }
     } catch (error) {
+      completeThrottle(wagerKey)
       // Log error but don't break the UI
       if (import.meta.env.DEV) {
         console.error('❌ Failed to fetch wagers from wager_rid.php:', error)
@@ -556,6 +764,7 @@ const BettingInterface: React.FC = () => {
   }, [roundId, fetchWagersForRound])
 
   // Periodically fetch wagers during betting period to keep bets in sync with server
+  // Reduced frequency to minimize server calls
   useEffect(() => {
     // Only fetch wagers during betting period (roundStatus === 1)
     if (roundStatus !== 1 || !roundId) return
@@ -566,13 +775,13 @@ const BettingInterface: React.FC = () => {
     }
     fetchWagersForRound(roundId)
 
-    // Poll every 10 seconds to keep bets in sync (similar to original site)
+    // Poll every 120 seconds to keep bets in sync (further reduced frequency to minimize server calls)
     const intervalId = setInterval(() => {
       if (import.meta.env.DEV) {
-        console.log('🔄 Periodic wager sync (every 10s)')
+        console.log('🔄 Periodic wager sync (every 120s)')
       }
       fetchWagersForRound(roundId)
-    }, 10000) // Refresh every 10 seconds
+    }, 120000) // Refresh every 120 seconds (reduced from 60s)
 
     return () => {
       clearInterval(intervalId)
@@ -580,53 +789,14 @@ const BettingInterface: React.FC = () => {
   }, [roundStatus, roundId, fetchWagersForRound])
 
   // Fetch balance when round is settled (roundStatus becomes 4)
-  useEffect(() => {
-    const handleRoundSettled = async (event: CustomEvent) => {
-      const settledRoundId = event.detail?.roundId
-      if (import.meta.env.DEV) {
-        console.log('💰 Round settled event received, fetching balance:', settledRoundId)
-      }
-      
-      // Throttle balance fetch to prevent duplicate calls
-      const balanceKey = `balance_settled_event_${settledRoundId}`
-      if (!shouldThrottle(balanceKey, 2000)) {
-        if (import.meta.env.DEV) {
-          console.debug('⏸️ Throttled balance fetch from settlement event')
-        }
-        return
-      }
-      
-      // Fetch balance after a short delay to ensure server has processed settlement
-      setTimeout(async () => {
-        try {
-          const balance = await apiService.getBalance()
-          completeThrottle(balanceKey)
-          setAccountBalance(balance)
-          if (import.meta.env.DEV) {
-            console.log('💰 Balance updated after round settlement:', balance)
-          }
-        } catch (error) {
-          if (import.meta.env.DEV) {
-            console.error('❌ Failed to fetch balance after settlement:', error)
-          }
-        }
-      }, 500) // Small delay to ensure server has processed settlement
-    }
-
-    window.addEventListener('round_settled', handleRoundSettled as unknown as EventListener)
-    return () => {
-      window.removeEventListener('round_settled', handleRoundSettled as unknown as EventListener)
-    }
-  }, [setAccountBalance])
-
-  // Also watch roundStatus directly and fetch balance when it becomes 4
-  // Use ref to track previous status to avoid multiple fetches
+  // Consolidated to single handler to avoid duplicate calls
   const prevRoundStatusRef2 = useRef<number | undefined>(undefined)
   useEffect(() => {
+    // Only fetch balance when roundStatus transitions to 4 (settled)
     if (roundStatus === 4 && prevRoundStatusRef2.current !== 4) {
       // Throttle balance fetch to prevent multiple simultaneous calls
       const balanceKey = `balance_settlement_${roundId}`
-      if (!shouldThrottle(balanceKey, 2000)) {
+      if (!shouldThrottle(balanceKey, 3000)) {
         if (import.meta.env.DEV) {
           console.debug('⏸️ Throttled balance fetch after settlement')
         }
@@ -634,39 +804,37 @@ const BettingInterface: React.FC = () => {
       }
       
       // Fetch balance when round is settled (only once per settlement)
-      const fetchSettledBalance = async () => {
-        // Retry logic: try multiple times with increasing delays
-        // Settlement might take a moment to process on server
-        const maxRetries = 3
-        const delays = [1000, 2000, 3000] // 1s, 2s, 3s
-        
-        for (let attempt = 0; attempt < maxRetries; attempt++) {
+      // Only fetch if WebSocket is disconnected (WebSocket provides balance updates when connected)
+      const connectionStatus = useGameStore.getState().connectionStatus
+      if (connectionStatus !== 'connected') {
+        const fetchSettledBalance = async () => {
+          // Wait a moment for server to process settlement
+          await new Promise(resolve => setTimeout(resolve, 1500))
+          
           try {
-            await new Promise(resolve => setTimeout(resolve, delays[attempt]))
             const balance = await apiService.getBalance()
             completeThrottle(balanceKey)
             setAccountBalance(balance)
             if (import.meta.env.DEV) {
-              console.log(`💰 Balance updated after round settlement (attempt ${attempt + 1}/${maxRetries}):`, balance)
+              console.log('💰 Balance updated after round settlement:', balance)
             }
-            return // Success, exit retry loop
           } catch (error) {
+            completeThrottle(balanceKey)
             if (import.meta.env.DEV) {
-              console.warn(`⚠️ Balance fetch attempt ${attempt + 1}/${maxRetries} failed:`, error)
-            }
-            // If last attempt, log error
-            if (attempt === maxRetries - 1) {
-              if (import.meta.env.DEV) {
-                console.error('❌ Failed to fetch balance after settlement after all retries:', error)
-              }
+              console.error('❌ Failed to fetch balance after settlement:', error)
             }
           }
         }
+        fetchSettledBalance()
+      } else {
+        completeThrottle(balanceKey)
+        if (import.meta.env.DEV) {
+          console.log('💰 Balance will be updated via WebSocket after settlement (connected)')
+        }
       }
-      fetchSettledBalance()
     }
     prevRoundStatusRef2.current = roundStatus
-  }, [roundStatus, setAccountBalance])
+  }, [roundStatus, roundId, setAccountBalance])
 
   // Track previous roundStatus and currentRound to detect transitions
   const prevRoundStatusRef = useRef<number | undefined>(undefined)
@@ -700,6 +868,8 @@ const BettingInterface: React.FC = () => {
       setActiveBetType(null)
       // Clear betting error
       setBettingError(null)
+      // Reset original balance tracking
+      setOriginalBalanceBeforePending(null)
       
       if (import.meta.env.DEV) {
         console.log('🔄 Betting state reset:', {
@@ -731,6 +901,8 @@ const BettingInterface: React.FC = () => {
       setPendingBets(new Map())
       // Reset active bet type
       setActiveBetType(null)
+      // Reset original balance tracking
+      setOriginalBalanceBeforePending(null)
       
       if (import.meta.env.DEV) {
         console.log('🔄 RoundId changed, clearing all bets. Previous:', prevRoundIdRef.current, 'New:', roundId)
@@ -749,91 +921,67 @@ const BettingInterface: React.FC = () => {
       setPendingBets(new Map())
       setActiveBetType(null)
       setBettingError(null)
+      // Reset original balance tracking
+      setOriginalBalanceBeforePending(null)
       
       // Clear odds map to force fresh fetch for new table
       setOddsMap(new Map())
+      
+      // Reset odds fetch ref so odds are refetched for new table
+      hasFetchedInitialOddsRef.current = false
+      prevOddsKeyRef.current = undefined
+      prevOddsRoundIdRef.current = undefined
       
       if (import.meta.env.DEV) {
         console.log('🔄 Table changed, resetting betting state. Previous:', prevTableIdRef.current, 'New:', tableId)
       }
     }
+    
+    // If tableId is available but we haven't fetched odds yet, trigger fetch
+    if (tableId && !hasFetchedInitialOddsRef.current && oddsRNo) {
+      if (import.meta.env.DEV) {
+        console.log('🔄 TableId available with roundId, triggering odds fetch')
+      }
+      fetchOdds()
+      hasFetchedInitialOddsRef.current = true
+      prevOddsKeyRef.current = oddsRNo
+      prevOddsRoundIdRef.current = roundId
+    }
+    
     prevTableIdRef.current = tableId
-  }, [tableId, clearBets, setBettingError])
+  }, [tableId, clearBets, setBettingError, roundId, oddsRNo, fetchOdds])
 
-  // Try to fetch roundId if missing
+  // Try to fetch roundId if missing (public history only; odds.php requires lobbyinfo r_no with no fallback)
   useEffect(() => {
     if (!roundId && tableId) {
       const fetchRoundId = async () => {
-        // Try multiple sources
         try {
-          // Method 1: Try odds API if we have roundId and session
-          // Note: odds API requires r_no format (YYMMDD + roundId), not just roundId
-          const storeState = getGameStore.getState()
-          const currentRoundId = storeState.roundId
-          if (currentRoundId && sessionManager.getSessionId()) {
-            try {
-              // Construct r_no: YYMMDD + roundId format
-              const r_no = constructRNo(currentRoundId)
-              if (!r_no) {
-                throw new Error('Cannot construct r_no')
-              }
-              const oddsResponse = await apiService.getOdds(r_no)
-              if (oddsResponse && oddsResponse.code === 'B100' && oddsResponse.data) {
-                // Odds API doesn't return r_id, so we can't use it to fetch roundId
-                // This method is mainly for getting odds, not roundId
-                if (import.meta.env.DEV) {
-                  console.log('✅ Fetched odds from API (BettingInterface)')
-                }
-                // Don't return - continue to try other methods for roundId
-              }
-            } catch (error) {
-              // Odds API failed, try next method
-            }
-          }
-          
-          // Method 2: Try public history (no session required)
-          try {
-            const publicHistory = await apiService.getPublicHistory(tableId)
-            if (publicHistory && publicHistory.data) {
-              const historyData = publicHistory.data
-              if (historyData.drawresult && historyData.drawresult[tableId]) {
-                const drawResults = historyData.drawresult[tableId]
-                if (Array.isArray(drawResults) && drawResults.length > 0) {
-                  const latestRound = drawResults[0] as any // Type assertion for r_id which may exist in API response
-                  if (latestRound.r_id) {
-                    const { setRoundId } = getGameStore.getState()
-                    setRoundId(latestRound.r_id.toString())
-                    if (import.meta.env.DEV) {
-                      console.log('✅ Fetched roundId from public history (BettingInterface):', latestRound.r_id)
-                    }
-                    return
-                  } else if (latestRound.r_no) {
-                    // Use round number as fallback
-                    const { setRoundId } = getGameStore.getState()
-                    setRoundId(latestRound.r_no.toString())
-                    if (import.meta.env.DEV) {
-                      console.log('✅ Using round number as roundId from public history (BettingInterface):', latestRound.r_no)
-                    }
-                    return
+          const publicHistory = await apiService.getPublicHistory(tableId)
+          if (publicHistory && publicHistory.data) {
+            const historyData = publicHistory.data
+            if (historyData.drawresult && historyData.drawresult[tableId]) {
+              const drawResults = historyData.drawresult[tableId]
+              if (Array.isArray(drawResults) && drawResults.length > 0) {
+                const latestRound = drawResults[0] as any
+                if (latestRound.r_id) {
+                  const { setRoundId } = getGameStore.getState()
+                  setRoundId(latestRound.r_id.toString())
+                  if (import.meta.env.DEV) {
+                    console.log('✅ Fetched roundId from public history (BettingInterface):', latestRound.r_id)
                   }
                 }
               }
             }
-          } catch (error) {
-            if (import.meta.env.DEV) {
-              console.warn('⚠️ Could not fetch roundId from public history (BettingInterface):', error)
-            }
           }
         } catch (error) {
           if (import.meta.env.DEV) {
-            console.warn('⚠️ Could not fetch roundId (BettingInterface):', error)
+            console.warn('⚠️ Could not fetch roundId from public history (BettingInterface):', error)
           }
         }
       }
-      
       fetchRoundId()
     }
-  }, [roundId, currentRound, tableId, constructRNo])
+  }, [roundId, tableId])
 
   /**
    * Validates bet amount against bet limits from API
@@ -841,14 +989,33 @@ const BettingInterface: React.FC = () => {
    * @returns Error message if invalid, null if valid
    */
   const validateBetAmount = useCallback((amount: number): string | null => {
-    if (betLimitMin !== undefined && amount < betLimitMin) {
-      return `Minimum bet amount is ${betLimitMin.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`
+    // Calculate total of all confirmed bets
+    const totalConfirmedBets = bets.reduce((sum, bet) => sum + bet.amount, 0)
+    const totalWithNewBet = totalConfirmedBets + amount
+    
+    // Chips 1 and 5 are always allowed in all cases, all the time
+    const isChip1Or5 = selectedChip === 1 || selectedChip === 5
+    
+    // Minimum limit check: check total confirmed bets + new bet, not individual bet amount
+    // If total confirmed bets already meet minimum, allow any additional bets
+    // For chips 1 and 5, always allow regardless of minimum
+    if (!isChip1Or5 && betLimitMin !== undefined) {
+      // If total confirmed bets already meet minimum, allow any additional bet
+      if (totalConfirmedBets < betLimitMin) {
+        // Total doesn't meet minimum yet, check if adding this bet would meet it
+        if (totalWithNewBet < betLimitMin) {
+      return t('error.minimumBetAmount').replace('{amount}', formatBetAmountNoDecimals(betLimitMin))
     }
+      }
+      // If totalConfirmedBets >= betLimitMin, allow any additional bet
+    }
+    
+    // Maximum limit check: still applies to individual bet amount
     if (betLimitMax !== undefined && amount > betLimitMax) {
-      return `Maximum bet amount is ${betLimitMax.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`
+      return t('error.maximumBetAmount').replace('{amount}', formatBetAmountNoDecimals(betLimitMax))
     }
     return null
-  }, [betLimitMin, betLimitMax])
+  }, [betLimitMin, betLimitMax, selectedChip, bets, formatBetAmountNoDecimals, t])
 
   /**
    * Handles bet button click
@@ -894,7 +1061,7 @@ const BettingInterface: React.FC = () => {
     // Only block betting if we have explicit negative signals (countdown === 0 or roundStatus !== 1)
     // If values are undefined, allow betting to proceed (backend will validate)
     if (currentCountdown !== undefined && currentCountdown <= 0) {
-      setBettingError('Betting is closed. Please wait for the next betting period.')
+      setBettingError(t('error.bettingClosed'))
       if (import.meta.env.DEV) {
         console.warn('⚠️ Betting blocked - countdown is 0 or negative:', {
           currentCountdown,
@@ -909,13 +1076,13 @@ const BettingInterface: React.FC = () => {
     // Only block if roundStatus is explicitly set and not 1
     // If undefined, allow betting (might be due to API failure, backend will validate)
     if (currentRoundStatus !== undefined && currentRoundStatus !== 1) {
-      let statusMessage = 'Betting is not available'
+      let statusMessage = t('error.bettingNotAvailable')
       if (currentRoundStatus === 2) {
-        statusMessage = 'Betting is closed. The round is in progress.'
+        statusMessage = t('error.bettingClosedInProgress')
       } else if (currentRoundStatus === 4) {
-        statusMessage = 'This round has been settled. Please wait for the next round.'
+        statusMessage = t('error.roundSettled')
       } else {
-        statusMessage = 'Round/session is not open for betting. Please wait for the next betting period.'
+        statusMessage = t('error.roundNotOpen')
       }
       setBettingError(statusMessage)
       if (import.meta.env.DEV) {
@@ -949,18 +1116,41 @@ const BettingInterface: React.FC = () => {
       setActiveBetType(betType)
     }
 
+    // Get current balance BEFORE updating pending bets to avoid race conditions
+    // Reuse storeState that was already declared above
+    const currentBalance = storeState.accountBalance
+    const currentPendingBets = pendingBets
+    const currentAmount = currentPendingBets.get(betType) || 0
+    const newAmount = currentAmount + selectedChip
+    
+    // Only validate maximum limit when adding chips - allow below minimum
+    // Minimum validation will happen when confirming the bet
+    if (betLimitMax !== undefined && newAmount > betLimitMax) {
+      setBettingError(t('error.maximumBetAmount').replace('{amount}', formatBetAmountNoDecimals(betLimitMax)))
+      return
+    }
+    
+    // Check if balance is sufficient before allowing bet
+    const newBalance = currentBalance - selectedChip
+    if (newBalance < 0) {
+      setBettingError(t('error.insufficientBalance'))
+      return
+    }
+    
+    // Store original balance before first pending bet (for cancel functionality)
+    if (currentPendingBets.size === 0 && originalBalanceBeforePending === null) {
+      setOriginalBalanceBeforePending(currentBalance)
+    }
+    
+    // Deduct balance optimistically on client side when placing bet
+    // Only deduct the new chip amount being added
+    setAccountBalance(newBalance)
+    
+    // Update pending bets
     setPendingBets((prevBets) => {
-      const currentAmount = prevBets.get(betType) || 0
-      const newAmount = currentAmount + selectedChip
-      
-      // Only validate maximum limit when adding chips - allow below minimum
-      // Minimum validation will happen when confirming the bet
-      if (betLimitMax !== undefined && newAmount > betLimitMax) {
-        setBettingError(`Maximum bet amount is ${betLimitMax.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.`)
-        return prevBets // Don't update if it would exceed maximum limit
-      }
-      
-      return new Map(prevBets).set(betType, newAmount)
+      const prevAmount = prevBets.get(betType) || 0
+      const updatedAmount = prevAmount + selectedChip
+      return new Map(prevBets).set(betType, updatedAmount)
     })
 
     // Trigger flying chip animation
@@ -989,7 +1179,7 @@ const BettingInterface: React.FC = () => {
         setFlyingChips((prev) => [...prev, newFlyingChip])
       }
     }
-      }, [selectedChip, activeBetType, countdown, roundStatus, setBettingError, validateBetAmount])
+      }, [selectedChip, activeBetType, countdown, roundStatus, setBettingError, validateBetAmount, t])
 
   /**
    * Confirms and submits all pending bets to the backend API
@@ -1007,11 +1197,11 @@ const BettingInterface: React.FC = () => {
     
     // Validate required fields
     if (!tableId) {
-      setBettingError('Table ID is missing. Please refresh the page.')
+      setBettingError(t('error.tableIdMissing'))
       return
     }
     if (!effectiveRoundId) {
-      setBettingError('Round ID is missing. Please wait for round data to load or refresh the page.')
+      setBettingError(t('error.roundIdMissing'))
       if (import.meta.env.DEV) {
         console.warn('⚠️ RoundId still missing when trying to place bet. Current store state:', {
           roundId: storeState.roundId,
@@ -1034,7 +1224,7 @@ const BettingInterface: React.FC = () => {
     // Only block betting if we have explicit negative signals (countdown === 0 or roundStatus !== 1)
     // If values are undefined, allow betting to proceed (backend will validate)
     if (currentCountdown !== undefined && currentCountdown <= 0) {
-      setBettingError('Betting is closed. Please wait for the next betting period.')
+      setBettingError(t('error.bettingClosed'))
       if (import.meta.env.DEV) {
         console.warn('⚠️ Betting blocked - countdown is 0 or negative:', {
           currentCountdown,
@@ -1048,13 +1238,13 @@ const BettingInterface: React.FC = () => {
     // Only block if roundStatus is explicitly set and not 1
     // If undefined, allow betting (might be due to API failure, backend will validate)
     if (currentRoundStatus !== undefined && currentRoundStatus !== 1) {
-      let statusMessage = 'Betting is not available'
+      let statusMessage = t('error.bettingNotAvailable')
       if (currentRoundStatus === 2) {
-        statusMessage = 'Betting is closed. The round is in progress.'
+        statusMessage = t('error.bettingClosedInProgress')
       } else if (currentRoundStatus === 4) {
-        statusMessage = 'This round has been settled. Please wait for the next round.'
+        statusMessage = t('error.roundSettled')
       } else {
-        statusMessage = 'Round/session is not open for betting. Please wait for the next betting period.'
+        statusMessage = t('error.roundNotOpen')
       }
       setBettingError(statusMessage)
       if (import.meta.env.DEV) {
@@ -1082,13 +1272,92 @@ const BettingInterface: React.FC = () => {
     setIsSubmitting(true)
     setBettingError(null)
 
-    // Validate all pending bets against bet limits before submission
+    // Calculate total of all pending bets
+    let totalPendingBets = 0
+    pendingBets.forEach((amount) => {
+      if (amount > 0) {
+        totalPendingBets += amount
+      }
+    })
+
+    // Validate total of all bets (confirmed + pending) against bet limits
+    // This ensures minimum limit is checked against total, not individual bets
+    const totalConfirmedBets = bets.reduce((sum, bet) => sum + bet.amount, 0)
+    const totalAllBets = totalConfirmedBets + totalPendingBets
+    
+    // Check if any pending bet is exactly 1 or 5 (single chip bets with chips 1 or 5)
+    // Chips 1 and 5 are always allowed in all cases, all the time
+    let hasChip1Or5Bet = false
+    for (const amount of pendingBets.values()) {
+      if (amount === 1 || amount === 5) {
+        hasChip1Or5Bet = true
+        break
+      }
+    }
+    // Also check if currently selected chip is 1 or 5
+    const isChip1Or5Selected = selectedChip === 1 || selectedChip === 5
+    const hasChip1Or5 = hasChip1Or5Bet || isChip1Or5Selected
+    
+    // Minimum limit check: SIMPLIFIED LOGIC
+    // 1. If total confirmed bets already meet minimum, ALWAYS allow any additional bets (no restrictions)
+    // 2. If total (confirmed + pending) meets minimum, allow it
+    // 3. If using chips 1 or 5, always allow (regardless of minimum)
+    if (betLimitMin !== undefined && totalAllBets > 0) {
+      if (import.meta.env.DEV) {
+        console.log('🔍 Bet validation check:', {
+          totalConfirmedBets,
+          totalPendingBets,
+          totalAllBets,
+          betLimitMin,
+          hasChip1Or5,
+          selectedChip,
+          pendingBets: Array.from(pendingBets.entries())
+        })
+      }
+      
+      // If total confirmed already meets minimum, allow ANY additional bets
+      if (totalConfirmedBets >= betLimitMin) {
+        if (import.meta.env.DEV) {
+          console.log('✅ Allowing confirmation: Total confirmed bets already meet minimum')
+        }
+        // Already met minimum, allow all additional bets - no validation needed
+        // Do nothing, allow confirmation to proceed
+      }
+      // If total confirmed doesn't meet minimum yet, check if total will meet it
+      else if (totalAllBets >= betLimitMin) {
+        if (import.meta.env.DEV) {
+          console.log('✅ Allowing confirmation: Total (confirmed + pending) meets minimum')
+        }
+        // Total will meet minimum, allow it
+        // Do nothing, allow confirmation to proceed
+      }
+      // If using chips 1 or 5, always allow
+      else if (hasChip1Or5) {
+        if (import.meta.env.DEV) {
+          console.log('✅ Allowing confirmation: Using chips 1 or 5')
+        }
+        // Chips 1 and 5 are always allowed
+        // Do nothing, allow confirmation to proceed
+      }
+      // Otherwise, block it
+      else {
+        if (import.meta.env.DEV) {
+          console.log('❌ Blocking confirmation: Minimum not met and not using chips 1/5')
+        }
+        setBettingError(t('error.minimumBetAmount').replace('{amount}', formatBetAmountNoDecimals(betLimitMin)))
+        setIsSubmitting(false)
+        return
+      }
+    }
+    
+    // Validate individual bet amounts against maximum limit
     for (const [betType, amount] of pendingBets.entries()) {
       if (amount <= 0) continue
       
-      const amountError = validateBetAmount(amount)
-      if (amountError) {
-        setBettingError(`${getBetTypeDisplayName(betType)}: ${amountError}`)
+      // Maximum limit check: still applies to individual bet amount
+      if (betLimitMax !== undefined && amount > betLimitMax) {
+        const betTypeName = getBetTypeDisplayName(betType)
+        setBettingError(t('error.betTypeMaximumBetAmount').replace('{betType}', betTypeName).replace('{amount}', formatBetAmountNoDecimals(betLimitMax)))
         setIsSubmitting(false)
         return
       }
@@ -1115,19 +1384,19 @@ const BettingInterface: React.FC = () => {
           const betAmount = Math.abs(amount) // Ensure positive amount
           
           // Fetch fresh odds before retry (only when retrying due to B250 error)
-          // Use roundId to construct r_no (YYMMDD + roundId format)
+          // Prefer lobbyinfo.php per-table "no" as r_no; fallback to legacy construction
           if (retryCount > 0 && effectiveRoundId) {
             // Throttle this fetch to prevent excessive calls during retry
-            const retryOddsKey = `odds_retry_${effectiveRoundId}_${betType}`
+            const retryOddsKey = `odds_retry_${oddsRNo}_${betType}`
             if (!shouldThrottle(retryOddsKey, 1000)) {
               if (import.meta.env.DEV) {
                 console.debug('⏸️ Throttled odds fetch during retry')
               }
             } else {
               try {
-                const r_no = constructRNo(effectiveRoundId)
+                const r_no = oddsRNo
                 if (!r_no) {
-                  throw new Error('Cannot construct r_no for odds fetch')
+                  throw new Error('Missing r_no from lobbyinfo (no fallback)')
                 }
                 const freshOddsResponse = await apiService.getOdds(r_no)
                 completeThrottle(retryOddsKey)
@@ -1227,57 +1496,8 @@ const BettingInterface: React.FC = () => {
             })
           }
 
-          // Always fetch balance from API after bet confirmation
-          // This ensures balance is accurate and reflects server-side calculations
-          // Add a small delay to allow server to process the bet and update balance
-          try {
-            // Wait 300ms before fetching balance to ensure server has processed the bet
-            await new Promise(resolve => setTimeout(resolve, 300))
-            
-            const updatedBalance = await apiService.getBalance()
-            setAccountBalance(updatedBalance)
-            if (import.meta.env.DEV) {
-              console.log('💰 Balance updated from API after bet confirmation:', updatedBalance)
-            }
-          } catch (error) {
-            // Fallback to response.balance if API fetch fails
-            if (import.meta.env.DEV) {
-              console.warn('⚠️ Failed to fetch balance from API after bet:', {
-                error: error instanceof Error ? error.message : error,
-                errorDetails: error,
-                responseBalance: response.balance,
-                responseCode: response.code,
-                responseMsg: response.msg
-              })
-            }
-            
-            if (response.balance !== undefined && response.balance !== null) {
-              // Handle string or number balance from response
-              const balanceValue = typeof response.balance === 'string' 
-                ? parseFloat(response.balance) 
-                : response.balance
-              
-              if (!isNaN(balanceValue) && isFinite(balanceValue)) {
-                setAccountBalance(balanceValue)
-                if (import.meta.env.DEV) {
-                  console.log('✅ Using response.balance as fallback:', balanceValue)
-                }
-              } else {
-                if (import.meta.env.DEV) {
-                  console.error('❌ Response balance is invalid:', response.balance)
-                }
-              }
-            } else {
-              if (import.meta.env.DEV) {
-                console.error('❌ No balance available in response or API')
-              }
-            }
-          }
-
-          // Note: We'll sync all bets from server after all bets are submitted
-          // The response contains allbets/unsettle with ALL bets for the round
-          // This ensures we show all bets the user has placed, including bets on multiple sides
-
+          // Don't update balance here - we'll update it once after all bets are confirmed
+          // This prevents double deduction and ensures we use the final server balance
           return response
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Failed to place bet'
@@ -1285,18 +1505,34 @@ const BettingInterface: React.FC = () => {
           // Parse error code and show user-friendly message
           let userFriendlyMessage = errorMessage
           if (errorMessage.includes('B212')) {
-            userFriendlyMessage = 'Round/session is not open for betting. Please wait for the next betting period.'
+            userFriendlyMessage = t('error.roundNotOpen')
           } else if (errorMessage.includes('B211')) {
-            userFriendlyMessage = 'Game/table is not open for betting.'
+            userFriendlyMessage = t('error.gameTableNotOpen')
           } else if (errorMessage.includes('B232')) {
-            userFriendlyMessage = 'Session expired. Please refresh the page.'
+            userFriendlyMessage = t('error.sessionExpired')
           } else if (errorMessage.includes('B201')) {
-            userFriendlyMessage = 'Insufficient balance.'
+            userFriendlyMessage = t('error.insufficientBalance')
           } else if (errorMessage.includes('B250')) {
-            userFriendlyMessage = 'Odds have changed. The bet was retried automatically but still failed. Please try again.'
+            userFriendlyMessage = t('error.oddsChanged')
+          } else if (errorMessage.includes('B216')) {
+            // B216: Amount outside bet-limit range
+            // Backend validates each bet individually, not the total
+            // If total confirmed bets already meet minimum, explain the limitation
+            const totalConfirmed = bets.reduce((sum, bet) => sum + bet.amount, 0)
+            const isChip1Or5Amount = amount === 1 || amount === 5
+            if (totalConfirmed >= (betLimitMin || 0) && isChip1Or5Amount) {
+              // User has met minimum but backend rejects individual small bets
+              const minStr = betLimitMin !== undefined ? formatBetAmountNoDecimals(betLimitMin) : 'minimum'
+              const totalStr = formatBetAmountNoDecimals(totalConfirmed)
+              userFriendlyMessage = t('error.backendMinimumRequirement').replace('{min}', minStr).replace('{total}', totalStr)
+            } else {
+              const minStr = betLimitMin !== undefined ? formatBetAmountNoDecimals(betLimitMin) : 'required'
+              userFriendlyMessage = t('error.amountOutsideRange').replace('{amount}', minStr)
+            }
           }
           
-          setBettingError(`${getBetTypeDisplayName(betType)}: ${userFriendlyMessage}`)
+          const betTypeName = getBetTypeDisplayName(betType)
+          setBettingError(`${betTypeName}: ${userFriendlyMessage}`)
           throw error
         }
       })
@@ -1304,12 +1540,75 @@ const BettingInterface: React.FC = () => {
       // Wait for all bets to be submitted and collect responses
       const responses = await Promise.all(betPromises.filter(p => p !== null))
       
+      // Update balance ONCE after all bets are confirmed
+      // Replace optimistic balance with real server balance from API
+      if (responses.length > 0) {
+        const lastResponse = responses[responses.length - 1]
+        const connectionStatus = useGameStore.getState().connectionStatus
+        const shouldFetchBalance = connectionStatus !== 'connected' // Only fetch if WebSocket not connected
+        
+        // Try to get balance from the last response first
+        if (lastResponse.balance !== undefined && lastResponse.balance !== null) {
+          const balanceValue = typeof lastResponse.balance === 'string' 
+            ? parseFloat(lastResponse.balance) 
+            : lastResponse.balance
+          
+          if (!isNaN(balanceValue) && isFinite(balanceValue)) {
+            setAccountBalance(balanceValue)
+            // Clear original balance tracking since bets are now confirmed
+            setOriginalBalanceBeforePending(null)
+            if (import.meta.env.DEV) {
+              console.log('💰 Balance updated from bet response (replaced optimistic balance):', balanceValue)
+            }
+          } else if (shouldFetchBalance) {
+            // Response balance invalid, fetch from API only if WebSocket disconnected
+            try {
+              await new Promise(resolve => setTimeout(resolve, 300))
+              const updatedBalance = await apiService.getBalance()
+              setAccountBalance(updatedBalance)
+              // Clear original balance tracking since bets are now confirmed
+              setOriginalBalanceBeforePending(null)
+              if (import.meta.env.DEV) {
+                console.log('💰 Balance updated from API after bet confirmation (replaced optimistic balance):', updatedBalance)
+              }
+            } catch (error) {
+              if (import.meta.env.DEV) {
+                console.warn('⚠️ Failed to fetch balance from API after bet:', error)
+              }
+            }
+          }
+        } else if (shouldFetchBalance) {
+          // No balance in response, fetch from API only if WebSocket disconnected
+          try {
+            await new Promise(resolve => setTimeout(resolve, 300))
+            const updatedBalance = await apiService.getBalance()
+            setAccountBalance(updatedBalance)
+            // Clear original balance tracking since bets are now confirmed
+            setOriginalBalanceBeforePending(null)
+            if (import.meta.env.DEV) {
+              console.log('💰 Balance updated from API after bet confirmation (replaced optimistic balance):', updatedBalance)
+            }
+          } catch (error) {
+            if (import.meta.env.DEV) {
+              console.warn('⚠️ Failed to fetch balance from API after bet:', error)
+            }
+          }
+        } else {
+          // WebSocket connected - balance will be updated via WebSocket
+          // Clear original balance tracking since bets are now confirmed
+          setOriginalBalanceBeforePending(null)
+          if (import.meta.env.DEV) {
+            console.log('💰 Balance will be updated via WebSocket (connected) - optimistic balance cleared')
+          }
+        }
+      }
+      
       // After successful bet submission, fetch all wagers from server using wager_rid.php
       // This ensures we have the complete and accurate list of bets for the round
-      if (responses.length > 0 && roundId) {
+      if (responses.length > 0 && effectiveRoundId) {
         // Small delay to ensure server has processed the bets
         setTimeout(() => {
-          fetchWagersForRound(roundId)
+          fetchWagersForRound(effectiveRoundId, true)
         }, 300)
       }
 
@@ -1328,6 +1627,8 @@ const BettingInterface: React.FC = () => {
       // Clear pending bets on success (allowing user to place more bets on other sides)
       setPendingBets(new Map())
       setActiveBetType(null)
+      // Clear original balance tracking since bets are now confirmed
+      setOriginalBalanceBeforePending(null)
       
       // Show success overlay
       setShowSuccess(true)
@@ -1340,16 +1641,25 @@ const BettingInterface: React.FC = () => {
       }, 3000)
     } catch (error) {
       // Error already set in catch block above
+      // Restore original balance if bet confirmation failed
+      if (originalBalanceBeforePending !== null) {
+        setAccountBalance(originalBalanceBeforePending)
+        setOriginalBalanceBeforePending(null)
+        if (import.meta.env.DEV) {
+          console.log('💰 Balance restored after bet confirmation failed')
+        }
+      }
     } finally {
       setIsSubmitting(false)
     }
-  }, [pendingBets, tableId, roundId, isSubmitting, addBet, setAccountBalance, setBettingError, getOddsForBetType, validateBetAmount, constructRNo, fetchWagersForRound])
+  }, [pendingBets, tableId, roundId, oddsRNo, isSubmitting, addBet, setAccountBalance, setBettingError, getOddsForBetType, validateBetAmount, fetchWagersForRound, t, bets, betLimitMin, formatBetAmountNoDecimals, originalBalanceBeforePending])
 
 
   /**
-   * Clears all pending bets
+   * Clears all pending bets (NOT confirmed bets)
    * Can only clear bets during betting period (roundStatus === 1)
    * Disabled when fighting (roundStatus === 2) or submitting
+   * Restores original balance when cancelling pending bets
    */
   const handleClearBets = useCallback(() => {
     // Prevent clearing if bets are being submitted (confirmed)
@@ -1364,11 +1674,31 @@ const BettingInterface: React.FC = () => {
       return
     }
     
+    // Calculate total pending bets amount to restore balance correctly
+    let totalPendingAmount = 0
+    pendingBets.forEach((amount) => {
+      totalPendingAmount += amount
+    })
+    
+    // Restore balance by adding back the total pending bets amount
+    // This restores the optimistic deductions made when placing pending bets
+    if (totalPendingAmount > 0) {
+      const currentBalance = storeState.accountBalance
+      const restoredBalance = currentBalance + totalPendingAmount
+      setAccountBalance(restoredBalance)
+    }
+    
+    // Clear original balance tracking since we're canceling all pending bets
+    if (originalBalanceBeforePending !== null) {
+      setOriginalBalanceBeforePending(null)
+    }
+    
+    // Only clear pending bets, NOT confirmed bets
     setPendingBets(new Map())
     // Reset the active bet type after clearing
     setActiveBetType(null)
-    clearBets()
-  }, [clearBets, isSubmitting, roundStatus])
+    // DO NOT call clearBets() - that would clear confirmed bets too!
+  }, [isSubmitting, roundStatus, originalBalanceBeforePending, setAccountBalance, pendingBets])
 
   /**
    * Rebet function: Places the same bets as the last round
@@ -1377,7 +1707,7 @@ const BettingInterface: React.FC = () => {
   const handleRebet = useCallback(() => {
     const lastBets = getLastRoundBets()
     if (lastBets.length === 0) {
-      setBettingError('No previous bets to rebet.')
+      setBettingError(t('error.noPreviousBets'))
       return
     }
     
@@ -1387,13 +1717,37 @@ const BettingInterface: React.FC = () => {
     const currentCountdown = countdown !== undefined ? countdown : storeState.countdown
     
     if (currentCountdown !== undefined && currentCountdown <= 0) {
-      setBettingError('Betting is closed. Please wait for the next betting period.')
+      setBettingError(t('error.bettingClosed'))
       return
     }
     
     if (currentRoundStatus !== undefined && currentRoundStatus !== 1) {
-      setBettingError('Betting is not available. Please wait for the next betting period.')
+      setBettingError(t('error.bettingNotAvailable'))
       return
+    }
+    
+    // Calculate total rebet amount
+    let totalRebetAmount = 0
+    lastBets.forEach((bet: Bet) => {
+      totalRebetAmount += bet.amount
+    })
+    
+    // Check if balance is sufficient before allowing rebet
+    if (totalRebetAmount > 0) {
+      const currentBalance = storeState.accountBalance
+      const newBalance = currentBalance - totalRebetAmount
+      if (newBalance < 0) {
+        setBettingError(t('error.insufficientBalance'))
+        return
+      }
+      
+      // Store original balance before rebet if not already stored
+      if (originalBalanceBeforePending === null) {
+        setOriginalBalanceBeforePending(currentBalance)
+      }
+      
+      // Deduct balance optimistically on client side
+      setAccountBalance(newBalance)
     }
     
     // Add all last round bets to pending bets
@@ -1417,12 +1771,13 @@ const BettingInterface: React.FC = () => {
         pendingBets: Array.from(newPendingBets.entries())
       })
     }
-  }, [getLastRoundBets, roundStatus, countdown, setBettingError])
+  }, [getLastRoundBets, roundStatus, countdown, setBettingError, t, originalBalanceBeforePending, setAccountBalance])
 
   /**
    * Doubles all pending bet amounts
    * Can only double bets during betting period (roundStatus === 1)
    * Disabled when fighting (roundStatus === 2) or submitting
+   * Deducts balance optimistically on client side (same as normal bets)
    */
   const handleDoubleBets = useCallback(() => {
     // Prevent doubling if bets are being submitted (confirmed)
@@ -1437,6 +1792,31 @@ const BettingInterface: React.FC = () => {
       return
     }
     
+    // Calculate total additional amount to deduct (doubling means adding the same amount)
+    let totalAdditionalAmount = 0
+    pendingBets.forEach((amount) => {
+      totalAdditionalAmount += amount // Doubling means adding the same amount again
+    })
+    
+    // Check if balance is sufficient before allowing double
+    if (totalAdditionalAmount > 0) {
+      const currentBalance = storeState.accountBalance
+      const newBalance = currentBalance - totalAdditionalAmount
+      if (newBalance < 0) {
+        setBettingError(t('error.insufficientBalance'))
+        return
+      }
+      
+      // Store original balance before doubling if not already stored
+      if (originalBalanceBeforePending === null) {
+        setOriginalBalanceBeforePending(currentBalance)
+      }
+      
+      // Deduct additional amount optimistically on client side
+      setAccountBalance(newBalance)
+    }
+    
+    // Update pending bets to double the amounts
     setPendingBets((prevBets) => {
       const doubled = new Map<BetType, number>()
       prevBets.forEach((amount, betType) => {
@@ -1444,7 +1824,7 @@ const BettingInterface: React.FC = () => {
       })
       return doubled
     })
-  }, [isSubmitting, roundStatus])
+  }, [isSubmitting, roundStatus, pendingBets, originalBalanceBeforePending, setAccountBalance])
 
   /**
    * Gets the confirmed bet amount for a specific bet type from confirmed bets
@@ -1485,33 +1865,49 @@ const BettingInterface: React.FC = () => {
 
   /**
    * Determines if betting is currently closed/disabled
-   * Betting is closed when:
-   * - roundStatus is not 1 (betting period)
-   * - countdown is 0 or negative
-   * - countdown is undefined (not betting time)
+   * Betting is ONLY allowed when roundStatus === 1 (Betting status) AND table is live (not in maintenance)
+   * Betting is closed for ALL other statuses: Fighting (2), Settled (4), Waiting (0), Maintenance, etc.
    */
   const isBettingClosed = useMemo(() => {
-    const storeState = getGameStore.getState()
-    const currentRoundStatus = roundStatus !== undefined ? roundStatus : storeState.roundStatus
-    const currentCountdown = countdown !== undefined ? countdown : storeState.countdown
-    
-    // Betting is closed if roundStatus is not 1
-    if (currentRoundStatus !== undefined && currentRoundStatus !== 1) {
-      return true
+    if (import.meta.env.DEV) {
+      console.log('🔍 isBettingClosed check:', {
+        roundStatus,
+        isLive,
+        'Note': roundStatus === 1 && isLive !== false ? '✅ Should be OPEN' : '🚫 Should be CLOSED'
+      })
     }
     
-    // Betting is closed if countdown is 0 or negative
-    if (currentCountdown !== undefined && currentCountdown <= 0) {
-      return true
+    // CRITICAL: Check if table is in maintenance first
+    // If table is not live (isLive === false), betting is disabled regardless of roundStatus
+    if (isLive === false) {
+      if (import.meta.env.DEV) {
+        console.log('🚫 Betting disabled - table is in maintenance (isLive === false)')
+      }
+      return true // Table is in maintenance - disable betting
     }
     
-    // Betting is closed if both are undefined (not initialized yet)
-    if (currentRoundStatus === undefined && currentCountdown === undefined) {
-      return true
+    // CRITICAL: Betting is ONLY allowed when roundStatus === 1 (Betting)
+    // All other statuses (2=Fighting, 4=Settled, 0=Waiting, undefined=not initialized) disable betting
+    if (roundStatus !== undefined) {
+      // Only allow betting when roundStatus is exactly 1
+      // Any other value (2, 4, 0, etc.) means betting is closed
+      const closed = roundStatus !== 1
+      if (import.meta.env.DEV) {
+        console.log('🔍 Betting status:', {
+          roundStatus,
+          isClosed: closed,
+          'Note': roundStatus === 1 ? '✅ Betting OPEN' : '🚫 Betting CLOSED'
+        })
+      }
+      return closed
     }
     
-    return false
-  }, [roundStatus, countdown])
+    // If roundStatus is undefined, betting is closed (safe default - table not initialized or in maintenance)
+    if (import.meta.env.DEV) {
+      console.log('🚫 Betting disabled - roundStatus is undefined (not initialized)')
+    }
+    return true
+  }, [roundStatus, isLive])
 
   return (
     <div className="betting-interface">
@@ -1521,41 +1917,41 @@ const BettingInterface: React.FC = () => {
         <div className="main-bets-top flex-1">
           <button 
             ref={(el) => el && (betButtonRefs.current.meron = el)}
-            className={`bet-button main-bet meron ${(activeBetType !== null && activeBetType !== 'meron') ? 'disabled' : ''} ${shakingBetType === 'meron' ? 'shake' : ''}`}
+            className={`bet-button main-bet meron ${(activeBetType !== null && activeBetType !== 'meron') ? 'disabled' : ''} ${shakingBetType === 'meron' ? 'shake' : ''} ${isBettingClosed ? 'disabled' : ''}`}
             onClick={() => handleBetClick('meron')}
-            disabled={(activeBetType !== null && activeBetType !== 'meron')}
+            disabled={isBettingClosed || (activeBetType !== null && activeBetType !== 'meron')}
           >
-            <span className="bet-label-large">Meron</span>
+            <span className="bet-label-large">{t('bet.label.meron')}</span>
             <span className="bet-odds">{getOddsForBetType('meron')}</span>
             <div className="bet-stats">
               {getPendingBetAmount('meron') > 0 && (
-                <span className="bet-amount-display pending">{getPendingBetAmount('meron').toFixed(2)}</span>
+                <span className="bet-amount-display pending">{formatBetAmountNoDecimals(getPendingBetAmount('meron'))}</span>
               )}
               {getConfirmedBetAmount('meron') > 0 && (
-                <span className="bet-amount-display confirmed">{getConfirmedBetAmount('meron').toFixed(2)}</span>
+                <span className="bet-amount-display confirmed">{formatBetAmountNoDecimals(getConfirmedBetAmount('meron'))}</span>
               )}
               {getPendingBetAmount('meron') === 0 && getConfirmedBetAmount('meron') === 0 && (
-                <span className="bet-amount-display">0.00</span>
+                <span className="bet-amount-display">{formatBetAmountNoDecimals(0)}</span>
               )}
             </div>
           </button>
           <button 
             ref={(el) => el && (betButtonRefs.current.wala = el)}
-            className={`bet-button main-bet wala ${(activeBetType !== null && activeBetType !== 'wala') ? 'disabled' : ''} ${shakingBetType === 'wala' ? 'shake' : ''}`}
+            className={`bet-button main-bet wala ${(activeBetType !== null && activeBetType !== 'wala') ? 'disabled' : ''} ${shakingBetType === 'wala' ? 'shake' : ''} ${isBettingClosed ? 'disabled' : ''}`}
             onClick={() => handleBetClick('wala')}
-            disabled={(activeBetType !== null && activeBetType !== 'wala')}
+            disabled={isBettingClosed || (activeBetType !== null && activeBetType !== 'wala')}
           >
-            <span className="bet-label-large">Wala</span>
+            <span className="bet-label-large">{t('bet.label.wala')}</span>
             <span className="bet-odds">{getOddsForBetType('wala')}</span>
             <div className="bet-stats">
               {getPendingBetAmount('wala') > 0 && (
-                <span className="bet-amount-display pending">{getPendingBetAmount('wala').toFixed(2)}</span>
+                <span className="bet-amount-display pending">{formatBetAmountNoDecimals(getPendingBetAmount('wala'))}</span>
               )}
               {getConfirmedBetAmount('wala') > 0 && (
-                <span className="bet-amount-display confirmed">{getConfirmedBetAmount('wala').toFixed(2)}</span>
+                <span className="bet-amount-display confirmed">{formatBetAmountNoDecimals(getConfirmedBetAmount('wala'))}</span>
               )}
               {getPendingBetAmount('wala') === 0 && getConfirmedBetAmount('wala') === 0 && (
-                <span className="bet-amount-display">0.00</span>
+                <span className="bet-amount-display">{formatBetAmountNoDecimals(0)}</span>
               )}
             </div>
           </button>
@@ -1565,21 +1961,21 @@ const BettingInterface: React.FC = () => {
         <div className="main-bets-bottom flex-1">
           <button 
             ref={(el) => el && (betButtonRefs.current.draw = el)}
-            className={`bet-button main-bet draw ${(activeBetType !== null && activeBetType !== 'draw') ? 'disabled' : ''}`}
+            className={`bet-button main-bet draw ${(activeBetType !== null && activeBetType !== 'draw') ? 'disabled' : ''} ${isBettingClosed ? 'disabled' : ''}`}
             onClick={() => handleBetClick('draw')}
-            disabled={(activeBetType !== null && activeBetType !== 'draw')}
+            disabled={isBettingClosed || (activeBetType !== null && activeBetType !== 'draw')}
           >
-            <span className="bet-label-large">Draw</span>
+            <span className="bet-label-large">{t('bet.label.draw')}</span>
             <span className="bet-odds">{getOddsForBetType('draw')}</span>
             <div className="bet-stats">
               {getPendingBetAmount('draw') > 0 && (
-                <span className="bet-amount-display pending">{getPendingBetAmount('draw').toFixed(2)}</span>
+                <span className="bet-amount-display pending">{formatBetAmountNoDecimals(getPendingBetAmount('draw'))}</span>
               )}
               {getConfirmedBetAmount('draw') > 0 && (
-                <span className="bet-amount-display confirmed">{getConfirmedBetAmount('draw').toFixed(2)}</span>
+                <span className="bet-amount-display confirmed">{formatBetAmountNoDecimals(getConfirmedBetAmount('draw'))}</span>
               )}
               {getPendingBetAmount('draw') === 0 && getConfirmedBetAmount('draw') === 0 && (
-                <span className="bet-amount-display">0.00</span>
+                <span className="bet-amount-display">{formatBetAmountNoDecimals(0)}</span>
               )}
             </div>
           </button>
@@ -1677,13 +2073,27 @@ const BettingInterface: React.FC = () => {
               // Remove last bet
               const lastBet = Array.from(pendingBets.entries()).pop()
               if (lastBet) {
+                const [betType, amount] = lastBet
                 setPendingBets(prev => {
                   const newBets = new Map(prev)
-                  newBets.delete(lastBet[0])
-                  // If no more bets, reset the active bet type
+                  newBets.delete(betType)
+                  
+                  // Restore balance for the removed bet
+                  const storeState = getGameStore.getState()
+                  const currentBalance = storeState.accountBalance
+                  const restoredBalance = currentBalance + amount
+                  setAccountBalance(restoredBalance)
+                  
+                  // If no more bets, reset the active bet type and restore original balance
                   if (newBets.size === 0) {
                     setActiveBetType(null)
+                    // Restore to original balance if all pending bets are removed
+                    if (originalBalanceBeforePending !== null) {
+                      setAccountBalance(originalBalanceBeforePending)
+                      setOriginalBalanceBeforePending(null)
+                    }
                   }
+                  
                   return newBets
                 })
               }

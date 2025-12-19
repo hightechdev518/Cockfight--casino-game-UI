@@ -71,7 +71,6 @@
   font-size: 0.9rem; /* Balanced size */
 }
 
-
 /* Mobile Responsive Styles */
 @media (max-width: 768px) {
   .account-info {
@@ -89,5 +88,15 @@
   .refresh-icon svg {
     width: 16px;
     height: 16px;
+  }
+}
+
+/* Desktop PC mode - when rendered inside the controls bar,
+   keep the account info compact and left-aligned. */
+@media (min-width: 1024px) {
+  .control-bar-top .account-info {
+    justify-content: flex-start;
+    width: auto;
+    max-width: none;
   }
 }

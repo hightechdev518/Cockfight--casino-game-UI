@@ -27,7 +27,7 @@ const FlyingChip: React.FC<FlyingChipProps> = ({
     return () => clearTimeout(timer)
   }, [onAnimationComplete])
 
-  const getChipSVG = (value: number) => `/${value}.svg`
+  const getChipSVG = (value: number) => `./${value}.svg`
 
   return (
     <div

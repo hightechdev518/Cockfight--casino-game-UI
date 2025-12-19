@@ -72,9 +72,9 @@
 }
 
 .summary-toggle-btn {
-  background: rgba(60, 60, 60, 0.95);
-  border: none;
-  border-radius: 6px;
+  background: linear-gradient(135deg, rgba(60, 60, 60, 0.95) 0%, rgba(70, 70, 70, 0.95) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
   padding: 6px 12px;
   height: 32px;
   display: flex;
@@ -83,25 +83,67 @@
   gap: 8px;
   font-size: 1.1rem;
   cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    0 0 0 0 rgba(64, 169, 255, 0.4);
   flex-shrink: 0;
+  overflow: hidden;
+  position: relative;
+  animation: arenaButtonPulse 2.5s ease-in-out infinite;
+}
+
+.summary-toggle-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.1),
+    transparent
+  );
+  transition: left 0.6s ease;
+}
+
+.summary-toggle-btn:hover::before {
+  left: 100%;
 }
 
 .summary-toggle-btn:hover {
-  background: rgba(70, 70, 70, 0.95);
-  transform: scale(1.05);
+  background: linear-gradient(135deg, rgba(80, 80, 80, 0.95) 0%, rgba(90, 90, 90, 0.95) 100%);
+  border-color: rgba(255, 255, 255, 0.6);
+  transform: scale(1.08);
+  box-shadow: 
+    0 4px 16px rgba(0, 0, 0, 0.4),
+    0 0 20px rgba(255, 255, 255, 0.25),
+    0 0 35px rgba(255, 255, 255, 0.15),
+    inset 0 0 20px rgba(255, 255, 255, 0.05);
+  animation: none;
 }
 
 .summary-toggle-btn:active {
-  background: rgba(50, 50, 50, 0.95);
-  transform: scale(0.95);
+  background: linear-gradient(135deg, rgba(50, 50, 50, 0.95) 0%, rgba(60, 60, 60, 0.95) 100%);
+  transform: scale(1.02);
+  box-shadow: 
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    0 0 10px rgba(255, 255, 255, 0.2);
 }
 
 .summary-toggle-btn .info-icon {
   width: 20px;
   height: 20px;
   flex-shrink: 0;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.3));
+}
+
+.summary-toggle-btn:hover .info-icon {
+  transform: scale(1.15) translateY(-2px);
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.6));
 }
 
 .summary-toggle-btn .lobby-text {
@@ -110,6 +152,16 @@
   font-weight: 500;
   letter-spacing: 0.3px;
   white-space: nowrap;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.summary-toggle-btn:hover .lobby-text {
+  color: #ffffff;
+  text-shadow: 
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    0 0 10px rgba(255, 255, 255, 0.3);
+  letter-spacing: 0.5px;
 }
 
 .roadmap-container {
@@ -166,6 +218,7 @@
   justify-content: center;
   width: 22px;
   height: 22px;
+  position: relative;
 }
 
 .bead-ring {
@@ -177,6 +230,26 @@
   background: rgba(60, 60, 60, 0.95);
   transition: transform 0.15s ease;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Tie mark (draw) - overlay on last placed cell */
+.bead-tie-mark {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  background: #44FF88;
+  border-radius: 50%;
+  right: 2px;
+  top: 2px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* simple variant uses the same mark but slightly smaller */
+.bead-tie-mark--simple {
+  width: 6px;
+  height: 6px;
+  right: 10%;
+  top: 10%;
 }
 
 .bead-item:hover .bead-ring {
@@ -221,6 +294,7 @@
   align-items: center;
   justify-content: center;
   aspect-ratio: 1;
+  position: relative;
 }
 
 .bead-ring-simple {
@@ -916,5 +990,12 @@
     padding: 0.25rem 0.4rem;
     min-height: 32px;
     font-size: 0.65rem;
+  }
+}
+
+/* Hide Arena button in GameHistory in PC mode - it's moved to chips panel */
+@media (min-width: 1024px) {
+  .roadmap-status-bar .summary-toggle-btn {
+    display: none !important;
   }
 }
