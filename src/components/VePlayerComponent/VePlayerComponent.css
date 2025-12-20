@@ -30,6 +30,16 @@
   min-height: 100% !important;
 }
 
+/* PC mode: Show full video without cropping */
+@media (min-width: 1024px) {
+  .veplayer-container video,
+  .veplayer-container canvas,
+  .veplayer-container .veplayer-video,
+  .veplayer-container .veplayer-video-wrapper {
+    object-fit: contain !important;
+  }
+}
+
 /* VePlayer internal wrappers and containers */
 .veplayer-container > div,
 .veplayer-container .veplayer-wrapper-internal,

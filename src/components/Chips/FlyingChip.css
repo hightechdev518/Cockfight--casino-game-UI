@@ -40,7 +40,7 @@
 .flying-chip {
   position: fixed;
   pointer-events: none;
-  z-index: 1000;
+  z-index: 10000;
   /* Initial position at start coordinates */
   left: var(--start-x);
   top: var(--start-y);
@@ -48,6 +48,16 @@
   height: 40px;
   margin: 0;
   padding: 0;
+  /* Always visible, even when parent is hidden */
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* PC Mode: Ensure flying chips are visible above all overlays */
+@media (min-width: 1024px) {
+  .flying-chip {
+    z-index: 10000;
+  }
 }
 
 .flying-chip-inner {

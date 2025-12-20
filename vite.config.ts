@@ -91,7 +91,7 @@ export default defineConfig({
   build: {
     // Don't fail build if hls.js is missing - it's optional
     rollupOptions: {
-      external: (id) => {
+      external: () => {
         // Don't externalize hls.js, but allow it to be missing
         return false
       }

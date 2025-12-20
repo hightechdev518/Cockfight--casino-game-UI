@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useGameStore, useGameStore as getGameStore, BetType, Bet } from '../../store/gameStore'
 import SelectedChipDisplay from '../Chips/SelectedChipDisplay'
 import FlyingChip from '../Chips/FlyingChip'
@@ -1985,18 +1986,21 @@ const BettingInterface: React.FC = () => {
 
       </div>
 
-      {/* Flying Chips Container */}
-      {flyingChips.map((chip) => (
-        <FlyingChip
-          key={chip.id}
-          chipValue={chip.chipValue}
-          startX={chip.startX}
-          startY={chip.startY}
-          endX={chip.endX}
-          endY={chip.endY}
-          onAnimationComplete={() => handleFlyingChipComplete(chip.id)}
-        />
-      ))}
+      {/* Flying Chips Container - Use portal to render at body level so they're visible even when betting panel is hidden in PC mode */}
+      {typeof document !== 'undefined' && createPortal(
+        flyingChips.map((chip) => (
+          <FlyingChip
+            key={chip.id}
+            chipValue={chip.chipValue}
+            startX={chip.startX}
+            startY={chip.startY}
+            endX={chip.endX}
+            endY={chip.endY}
+            onAnimationComplete={() => handleFlyingChipComplete(chip.id)}
+          />
+        )),
+        document.body
+      )}
 
       {/* Success overlay (appears on confirm) */}
       <SuccessOverlay show={showSuccess} onClose={() => setShowSuccess(false)} />

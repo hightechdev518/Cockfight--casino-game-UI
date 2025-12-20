@@ -41,7 +41,7 @@ interface ControlsProps {
  * @returns JSX element
  */
 const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onRebet, chipSlot, pendingBetAmount = 0, isSubmitting = false, confirmedBetsCount = 0, isBettingClosed = false }) => {
-  const { toggleGameSummary } = useGameStore()
+  const { toggleGameHistory, showGameHistory } = useGameStore()
   const { t } = useI18n()
   const [isDesktop, setIsDesktop] = useState(false)
 
@@ -226,19 +226,26 @@ const Controls: React.FC<ControlsProps> = ({ onConfirm, onClear, onDouble, onReb
             </svg>
           </button>
         )}
-        {/* Arena button - only in PC mode, stays on the far right */}
-        {isDesktop && (
-          <button
-            onClick={toggleGameSummary}
-            className="arena-button-controls"
-            title="Switch to Game Summary"
-            type="button"
-          >
-            <img src="./home.svg" alt="Home" className="arena-icon" />
-            <span className="arena-text">{t('gameHistory.arena')}</span>
-          </button>
-        )}
       </div>
+
+      {/* Right side: History button (PC mode only) */}
+      {isDesktop && (
+        <div className="controls-right-group">
+          <button
+            onClick={toggleGameHistory}
+            className="history-button-controls"
+            title={showGameHistory ? "Hide Game History" : "Show Game History"}
+            type="button"
+            aria-label={showGameHistory ? "Hide Game History" : "Show Game History"}
+          >
+            <svg className="history-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <polyline points="12 6 12 12 16 14"/>
+            </svg>
+            <span className="history-text">{t('gameHistory.history')}</span>
+          </button>
+        </div>
+      )}
 
     </div>
   )

@@ -228,9 +228,9 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
           // Extract roadmap data from API (if available)
           // Backend README: /history.php returns roadmap, goodroad, and allgr
           // The roadmap is the server-calculated bead road pattern
-          let roadmap = historyData.roadmap || (historyData.data && historyData.data.roadmap)
-          let goodroad = historyData.goodroad || (historyData.data && historyData.data.goodroad)
-          let allgr = historyData.allgr || (historyData.data && historyData.data.allgr)
+          const roadmap = historyData.roadmap || (historyData.data && historyData.data.roadmap)
+          const goodroad = historyData.goodroad || (historyData.data && historyData.data.goodroad)
+          const allgr = historyData.allgr || (historyData.data && historyData.data.allgr)
           
           // Store server roadmap if available (may be table-specific)
           if (roadmap) {
@@ -259,7 +259,7 @@ const GameHistory: React.FC<GameHistoryProps> = ({ variant = 'simple' }) => {
           // Extract accu (accumulation) data for statistics
           // Original site structure: accu is at root level, format: { "21000@M": 52, "21000@W": 42, "21000@D": 6 }
           // The format is "21000@{M|W|D}" where 21000 might be a game/product ID
-          let accu = historyData.accu || (historyData.data && historyData.data.accu)
+          const accu = historyData.accu || (historyData.data && historyData.data.accu)
           
           if (import.meta.env.DEV) {
             console.log('📊 Looking for accu data, tableId:', tableId)

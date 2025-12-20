@@ -78,6 +78,16 @@ const Chips: React.FC = () => {
                     src={getChipSVG(value)}
                     alt={`Chip ${value}`}
                     className="chip-image"
+                    onError={(e) => {
+                      // Retry loading the image once on error
+                      const img = e.currentTarget
+                      const originalSrc = img.src
+                      setTimeout(() => {
+                        img.src = ''
+                        img.src = originalSrc
+                      }, 100)
+                    }}
+                    loading="eager"
                   />
                 </div>
               </button>
@@ -108,6 +118,16 @@ const Chips: React.FC = () => {
               src={getChipSVG(selectedChip || 10)}
               alt={`Chip ${selectedChip || 10}`}
               className="chip-image w-[56px] h-[40px]"
+              onError={(e) => {
+                // Retry loading the image once on error
+                const img = e.currentTarget
+                const originalSrc = img.src
+                setTimeout(() => {
+                  img.src = ''
+                  img.src = originalSrc
+                }, 100)
+              }}
+              loading="eager"
             />
           </div>
         </button>
@@ -132,6 +152,16 @@ const Chips: React.FC = () => {
                     src={getChipSVG(value)}
                     alt={`Chip ${value}`}
                     className="chip-image w-[56px] h-[40px]"
+                    onError={(e) => {
+                      // Retry loading the image once on error
+                      const img = e.currentTarget
+                      const originalSrc = img.src
+                      setTimeout(() => {
+                        img.src = ''
+                        img.src = originalSrc
+                      }, 100)
+                    }}
+                    loading="eager"
                   />
                 </div>
               </button>

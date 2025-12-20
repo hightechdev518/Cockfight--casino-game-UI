@@ -122,6 +122,7 @@ export interface GameState {
   countdown?: number
   roundStatus?: number // Round status: 1 = betting open, 2 = betting closed/fighting, 4 = settled
   showGameSummary: boolean
+  showGameHistory: boolean // Show game history in PC mode
   bettingError?: string | null // Store betting errors
   lastRoundBets: Bet[] // Store bets from the last settled round for rebet functionality
   sessionExpired: boolean // Session expired flag (B232 error)
@@ -143,6 +144,8 @@ interface GameStore extends GameState {
   setAccountBalance: (balance: number) => void
   toggleGameSummary: () => void
   setGameSummary: (show: boolean) => void
+  toggleGameHistory: () => void
+  setShowGameHistory: (show: boolean) => void
   setRoundId: (roundId: string) => void
   setBettingError: (error: string | null) => void
   switchTable: (tableId: string) => void
@@ -223,6 +226,7 @@ const getInitialState = (): GameState => {
     currentRound: undefined, // Will be set from API/WebSocket (lobbyinfo.php or WebSocket)
     countdown: undefined, // Timer only shows after game result, set by WebSocket/API
     showGameSummary: false,
+    showGameHistory: false, // Hidden by default in PC mode
     bettingError: null,
     roundId: storedRoundId || undefined, // Restore roundId if available, otherwise from API/WebSocket
     lastRoundBets: [], // Store bets from last settled round for rebet
@@ -479,6 +483,10 @@ export const useGameStore = create<GameStore>((set) => ({
   toggleGameSummary: () => set((state) => ({ showGameSummary: !state.showGameSummary })),
 
   setGameSummary: (show) => set({ showGameSummary: show }),
+
+  toggleGameHistory: () => set((state) => ({ showGameHistory: !state.showGameHistory })),
+
+  setShowGameHistory: (show) => set({ showGameHistory: show }),
 
   setRoundId: (roundId) => {
     set((state) => {

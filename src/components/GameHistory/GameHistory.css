@@ -30,6 +30,14 @@
   min-height: 180px;
 }
 
+/* PC mode overlay - keep original size */
+.game-history-overlay-pc .game-history.detailed {
+  height: 180px;
+  max-height: 180px;
+  min-height: 180px;
+  flex: 0 0 auto;
+}
+
 /* In landscape mode, the betting summary bar is part of the panel */
 /* The roadmap-container will shrink to fit both status bar and summary bar */
 @media (orientation: landscape) {
@@ -990,12 +998,5 @@
     padding: 0.25rem 0.4rem;
     min-height: 32px;
     font-size: 0.65rem;
-  }
-}
-
-/* Hide Arena button in GameHistory in PC mode - it's moved to chips panel */
-@media (min-width: 1024px) {
-  .roadmap-status-bar .summary-toggle-btn {
-    display: none !important;
   }
 }

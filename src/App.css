@@ -210,50 +210,86 @@
   }
 }
 
-/* Desktop Layout - Same order as mobile: Video -> Game History -> Betting -> Controls */
+/* Desktop Layout - Video fullscreen with betting panel overlay */
 @media (min-width: 1024px) {
-  /* Reset landscape mode behaviors for desktop - use mobile-like vertical stack */
+  /* PC Mode: Fullscreen layout - video takes 100% of screen */
   .app-container {
-    height: auto;
+    height: 100vh;
     min-height: 100vh;
-    max-height: none;
+    max-height: 100vh;
+    overflow: hidden;
+    position: relative;
   }
   
+  /* Video section takes full screen */
   .video-section {
-    flex: 0 0 50vh !important;
-    min-height: 50vh !important;
-    max-height: 50vh !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    flex: none !important;
+    min-height: 100vh !important;
+    max-height: 100vh !important;
     border-bottom: none !important;
     padding-left: 0 !important;
-    order: 0 !important; /* Reset order - use natural document order */
+    order: 0 !important;
+    z-index: 1;
+  }
+
+  /* PC Mode: Betting panel overlays on top of video at the bottom */
+  .betting-section-wrapper {
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100vw !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    flex: none !important;
+    border-top: 2px solid rgba(255, 215, 0, 0.3) !important;
+    background: linear-gradient(to bottom, transparent, rgba(26, 26, 46, 0.95) 10%, rgba(26, 26, 46, 0.98) 100%) !important;
+    backdrop-filter: blur(8px) !important;
+    z-index: 100 !important;
+    order: 0 !important;
+    justify-content: flex-start !important;
+  }
+
+  /* PC Mode: Hide betting panel by default, show on hover in bottom 30% */
+  .betting-section-wrapper.betting-panel-hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(100%);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+
+  .betting-section-wrapper:not(.betting-panel-hidden) {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+
+  /* Game History Overlay - PC mode only */
+  .game-history-overlay-pc {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 180px;
+    max-height: 180px;
+    z-index: 50;
+    background: rgba(60, 60, 60, 0.98);
+    backdrop-filter: blur(4px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
   }
   
   .roadmap-section-mobile {
-    display: block !important; /* Show roadmap section on desktop, same as mobile */
-    flex: 0 0 180px; /* Reduced to match mobile */
-    height: 180px;
-    max-height: 180px;
-    position: static !important; /* Reset absolute positioning from landscape mode */
-    left: auto;
-    right: auto;
-    bottom: auto;
-    width: 100%;
-    z-index: auto;
-    box-shadow: none;
-    transform: none !important; /* Reset transform */
-    transition: none;
-    padding: 0;
-    order: 0 !important; /* Reset order - use natural document order */
-  }
-  
-  .betting-section-wrapper {
-    flex: 1 1 auto;
-    min-height: 326px;
-    border-top: 2px solid rgba(255, 215, 0, 0.3);
-    order: 0 !important; /* Reset order - use natural document order */
-    justify-content: flex-start; /* Reset justify-content */
-    height: auto;
-    max-height: none;
+    display: none !important; /* Hide roadmap section in PC mode - it's now an overlay */
   }
   
   .betting-section-mobile {
@@ -265,36 +301,65 @@
   }
 }
 
-/* Desktop Landscape - Override landscape rules to use mobile-like layout */
+/* Desktop Landscape - Same fullscreen layout as portrait */
 @media (min-width: 1024px) and (orientation: landscape) {
   .app-container {
-    height: auto !important;
-    min-height: 100vh;
-    max-height: none;
+    height: 100vh !important;
+    min-height: 100vh !important;
+    max-height: 100vh !important;
+    overflow: hidden !important;
+    position: relative !important;
   }
   
   .video-section {
-    flex: 0 0 50vh !important;
-    min-height: 50vh !important;
-    max-height: 50vh !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    flex: none !important;
+    min-height: 100vh !important;
+    max-height: 100vh !important;
     border-bottom: none !important;
     padding-left: 0 !important;
     order: 0 !important;
+    z-index: 1;
   }
   
   .roadmap-section-mobile {
-    display: block !important;
-    position: static !important;
-    transform: none !important;
-    flex: 0 0 280px !important;
-    height: 280px !important;
-    max-height: 202px !important;
-    order: 0 !important;
+    display: none !important; /* Hide roadmap section in PC mode - it's now an overlay */
+  }
+
+  .game-history-overlay-pc {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 180px;
+    max-height: 180px;
+    z-index: 50;
+    background: rgba(60, 60, 60, 0.98);
+    backdrop-filter: blur(4px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
   }
   
   .betting-section-wrapper {
-    flex: 1 1 auto !important;
-    min-height: 326px !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100vw !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    flex: none !important;
+    border-top: 2px solid rgba(255, 215, 0, 0.3) !important;
+    background: linear-gradient(to bottom, transparent, rgba(26, 26, 46, 0.95) 10%, rgba(26, 26, 46, 0.98) 100%) !important;
+    backdrop-filter: blur(8px) !important;
+    z-index: 100 !important;
     order: 0 !important;
     justify-content: flex-start !important;
   }

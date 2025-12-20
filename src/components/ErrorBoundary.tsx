@@ -1,4 +1,4 @@
-import { Component, ErrorInfo, ReactNode } from 'react'
+import { Component, ReactNode } from 'react'
 
 interface Props {
   children: ReactNode
@@ -18,7 +18,7 @@ class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error }
   }
 
-  public componentDidCatch(_error: Error, _errorInfo: ErrorInfo) {
+  public componentDidCatch() {
     // Error logged by global error handler in main.tsx
   }
 

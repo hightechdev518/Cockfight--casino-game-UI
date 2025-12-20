@@ -56,6 +56,7 @@ export type TranslationKey =
   | 'gameSummary.status.maintenance'
   // Game history
   | 'gameHistory.arena'
+  | 'gameHistory.history'
   // Bet success
   | 'bet.success.message'
   // Win/Lose messages
@@ -143,6 +144,7 @@ const translations: TranslationsByLang = {
     'gameSummary.status.maintenance': 'Maintenance',
     // Game history
     'gameHistory.arena': 'Arena',
+    'gameHistory.history': 'History',
     // Bet success
     'bet.success.message': 'Bet Success',
     // Win/Lose messages
@@ -225,6 +227,7 @@ const translations: TranslationsByLang = {
     'gameSummary.status.maintenance': '維護中',
     // Game history
     'gameHistory.arena': '場次',
+    'gameHistory.history': '歷史',
     // Bet success
     'bet.success.message': '投注成功',
     // Win/Lose messages
@@ -387,6 +390,7 @@ const translations: TranslationsByLang = {
     'gameSummary.status.maintenance': 'Bảo trì',
     // Game history
     'gameHistory.arena': 'Sàn đấu',
+    'gameHistory.history': 'Lịch sử',
     // Bet success
     'bet.success.message': 'Đặt cược thành công',
     // Win/Lose messages
@@ -468,6 +472,7 @@ const translations: TranslationsByLang = {
     'gameSummary.status.maintenance': 'メンテナンス中',
     // Game history
     'gameHistory.arena': 'アリーナ',
+    'gameHistory.history': '履歴',
     // Bet success
     'bet.success.message': 'ベット成功',
     // Win/Lose messages
@@ -549,6 +554,7 @@ const translations: TranslationsByLang = {
     'gameSummary.status.maintenance': '점검 중',
     // Game history
     'gameHistory.arena': '아레나',
+    'gameHistory.history': '기록',
     // Bet success
     'bet.success.message': '베팅 성공',
     // Win/Lose messages
@@ -630,6 +636,7 @@ const translations: TranslationsByLang = {
     'gameSummary.status.maintenance': 'ดูแลรักษา',
     // Game history
     'gameHistory.arena': 'เวที',
+    'gameHistory.history': 'ประวัติ',
     // Bet success
     'bet.success.message': 'เดิมพันสำเร็จ',
     // Win/Lose messages
@@ -711,6 +718,7 @@ const translations: TranslationsByLang = {
     'gameSummary.status.maintenance': 'Pemeliharaan',
     // Game history
     'gameHistory.arena': 'Arena',
+    'gameHistory.history': 'Riwayat',
     // Bet success
     'bet.success.message': 'Taruhan Berhasil',
     // Win/Lose messages

@@ -122,6 +122,7 @@ export function useVePlayer({
           }
           playerRef.current.destroy();
         } catch (e) {
+          // Ignore cleanup errors
         } finally {
           isDestroyingRef.current = false;
         }
@@ -142,6 +143,12 @@ export function useVePlayer({
 
       // FLV first, then HLS as fallback
       const fallbackOrder = ['flv', 'hls'];
+
+      // Determine video fill mode based on screen size
+      // For desktop (PC mode), use 'auto' to allow CSS to control display (shows full video)
+      // For mobile, use 'fillHeight' to fill the height
+      const isDesktop = window.innerWidth >= 1024;
+      const videoFillMode: 'auto' | 'fillHeight' = isDesktop ? 'auto' : 'fillHeight';
 
       // Create player
       const player = await window.VePlayer.createLivePlayer({
@@ -169,7 +176,7 @@ export function useVePlayer({
         infoPanel: {
           visible: false,
         },
-        videoFillMode: 'fillHeight',
+        videoFillMode: videoFillMode,
         closeVideoClick: true,
         codec: 'h264',
         // iOS requires muted autoplay; also enables auto-resume after reconnect.
@@ -227,8 +234,8 @@ export function useVePlayer({
         });
 
         player.on('loadedmetadata', () => {
+          // Metadata loaded
         });
-      } else {
       }
 
       playerRef.current = player;
@@ -268,6 +275,7 @@ export function useVePlayer({
           }
           playerRef.current.destroy();
         } catch (e) {
+          // Ignore cleanup errors
         }
       }
 

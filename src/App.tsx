@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useGameStore } from './store/gameStore'
 import LiveVideo from './components/LiveVideo/LiveVideo'
 import BettingInterface from './components/BettingInterface/BettingInterface'
@@ -10,6 +10,7 @@ import { apiService, sessionManager } from './services/apiService'
 import { getInitParams, setUrlParam } from './utils/urlParams'
 import { shouldThrottle, completeThrottle } from './utils/apiThrottle'
 import { setLanguage, isValidLanguageCode, type LanguageCode } from './utils/language'
+import { preloadChipImagesWithTimeout } from './utils/preloadChipImages'
 import './App.css'
 
 // Silence all console output in src/ (requested cleanup)
@@ -21,9 +22,9 @@ const console: Pick<Console, 'log' | 'warn' | 'error' | 'debug'> = {
 }
 
 function App() {
-  const { initializeGame, showGameSummary, setGameSummary, tableId, connectionStatus, sessionExpired, setSessionExpired } = useGameStore()
+  const { initializeGame, showGameSummary, setGameSummary, showGameHistory, tableId, connectionStatus, sessionExpired, setSessionExpired } = useGameStore()
+  const [isDesktop, setIsDesktop] = useState(false)
   const { connect, disconnect } = useWebSocket()
-  const [scoreboardVisible, setScoreboardVisible] = useState(false)
   
   // Refs to track initialization state
   const isInitializingRef = useRef<boolean>(true)
@@ -94,10 +95,6 @@ function App() {
   // Handle redirect to home
   const handleGoToHome = () => {
     window.location.href = '/'
-  }
-
-  if(scoreboardVisible) {
-    
   }
 
   // Extract initialization logic into a reusable function
@@ -400,7 +397,7 @@ function App() {
                         // Store raw tablestatus from API when available so UI can show full table status
                         if (item.tablestatus !== undefined && updateData.roundStatus === undefined) {
                           // Only set if WebSocket hasn't already provided a tableStatus/roundStatus snapshot
-                          ;(updateData as any).tableStatus = item.tablestatus
+                          (updateData as any).tableStatus = item.tablestatus
                         }
                         break
                       }
@@ -637,6 +634,13 @@ function App() {
       // WebSocket not available
     }
   }
+
+  // Preload chip images on mount to prevent display issues
+  useEffect(() => {
+    preloadChipImagesWithTimeout(5000).catch(() => {
+      // Silently fail - images will load on demand if preload fails
+    })
+  }, [])
 
   // Initial mount initialization
   useEffect(() => {
@@ -1021,11 +1025,9 @@ function App() {
         const st = container ? container.scrollTop : 0
         if (st - prev > threshold) {
           // scrolling down -> show scoreboard
-          setScoreboardVisible(true)
           prev = st
         } else if (prev - st > threshold) {
           // scrolling up -> hide scoreboard
-          setScoreboardVisible(false)
           prev = st
         } else {
           prev = st
@@ -1036,7 +1038,7 @@ function App() {
 
       const mqHandler = (e: MediaQueryListEvent) => {
         if (!e.matches) {
-          setScoreboardVisible(false)
+          // Mobile view changed
         } else {
           container = document.querySelector('.app-container') as HTMLElement | null
           prev = container ? container.scrollTop : 0
@@ -1053,6 +1055,145 @@ function App() {
       }
     }, [])
 
+  // Detect desktop mode
+  useEffect(() => {
+    const checkDesktop = () => {
+      setIsDesktop(window.innerWidth >= 1024)
+    }
+    
+    checkDesktop()
+    window.addEventListener('resize', checkDesktop)
+    return () => window.removeEventListener('resize', checkDesktop)
+  }, [])
+
+  // Track mouse position for PC mode betting panel visibility
+  const [showBettingPanel, setShowBettingPanel] = useState(true) // Start visible, will hide after mount in PC mode
+  const hideTimeoutRef = useRef<number | null>(null)
+  const autoHideTimeoutRef = useRef<number | null>(null)
+  const lastMouseMoveTimeRef = useRef<number>(Date.now())
+  const bettingSectionRef = useRef<HTMLDivElement | null>(null)
+  
+  useEffect(() => {
+    // Only enable auto-hide in PC mode
+    if (!isDesktop) {
+      setShowBettingPanel(true)
+      return
+    }
+
+    // Initially hide the panel in PC mode after a short delay
+    const hideTimer = setTimeout(() => {
+      setShowBettingPanel(false)
+    }, 1000) // Hide after 1 second on mount
+
+    // Function to schedule auto-hide after 5 seconds of inactivity
+    const scheduleAutoHide = () => {
+      // Clear any existing auto-hide timeout
+      if (autoHideTimeoutRef.current !== null) {
+        clearTimeout(autoHideTimeoutRef.current)
+      }
+      
+      // Set new auto-hide timeout (5 seconds)
+      autoHideTimeoutRef.current = window.setTimeout(() => {
+        setShowBettingPanel(false)
+        autoHideTimeoutRef.current = null
+      }, 5000) // 5 seconds of inactivity
+    }
+
+    // Function to cancel auto-hide and show panel
+    const showPanelAndResetTimer = () => {
+      // Clear any pending hide timeouts
+      if (hideTimeoutRef.current !== null) {
+        clearTimeout(hideTimeoutRef.current)
+        hideTimeoutRef.current = null
+      }
+      
+      // Show panel
+      setShowBettingPanel(true)
+      
+      // Update last mouse move time
+      lastMouseMoveTimeRef.current = Date.now()
+      
+      // Schedule auto-hide after 5 seconds
+      scheduleAutoHide()
+    }
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const windowHeight = window.innerHeight
+      const mouseY = e.clientY
+      const bottomThreshold = windowHeight * 0.70 // Bottom 30% of screen
+      
+      // Update last mouse move time
+      lastMouseMoveTimeRef.current = Date.now()
+      
+      // Show panel when mouse is in bottom 30% of screen
+      if (mouseY >= bottomThreshold) {
+        showPanelAndResetTimer()
+      } else {
+        // Hide panel when mouse moves out of bottom 30%
+        // Add a small delay to prevent flickering when moving mouse quickly
+        if (hideTimeoutRef.current !== null) {
+          clearTimeout(hideTimeoutRef.current)
+        }
+        hideTimeoutRef.current = window.setTimeout(() => {
+          setShowBettingPanel(false)
+          hideTimeoutRef.current = null
+          // Clear auto-hide timer when manually hiding
+          if (autoHideTimeoutRef.current !== null) {
+            clearTimeout(autoHideTimeoutRef.current)
+            autoHideTimeoutRef.current = null
+          }
+        }, 300) // 300ms delay before hiding
+      }
+    }
+
+    // Handle mouse enter/leave on betting section to keep it visible when hovering
+    // This ensures the panel stays visible even if mouse moves slightly above bottom 30%
+    const handleMouseEnter = () => {
+      showPanelAndResetTimer()
+    }
+
+    const handleMouseLeave = (e: MouseEvent) => {
+      const windowHeight = window.innerHeight
+      const mouseY = e.clientY
+      const bottomThreshold = windowHeight * 0.70
+      
+      // Only hide if mouse left betting section AND is not in bottom 30% of screen
+      if (mouseY < bottomThreshold) {
+        hideTimeoutRef.current = window.setTimeout(() => {
+          setShowBettingPanel(false)
+          hideTimeoutRef.current = null
+          // Clear auto-hide timer when manually hiding
+          if (autoHideTimeoutRef.current !== null) {
+            clearTimeout(autoHideTimeoutRef.current)
+            autoHideTimeoutRef.current = null
+          }
+        }, 300)
+      }
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    const bettingSection = bettingSectionRef.current
+    if (bettingSection) {
+      bettingSection.addEventListener('mouseenter', handleMouseEnter)
+      bettingSection.addEventListener('mouseleave', handleMouseLeave as any)
+    }
+    
+    return () => {
+      clearTimeout(hideTimer)
+      if (hideTimeoutRef.current !== null) {
+        clearTimeout(hideTimeoutRef.current)
+      }
+      if (autoHideTimeoutRef.current !== null) {
+        clearTimeout(autoHideTimeoutRef.current)
+      }
+      window.removeEventListener('mousemove', handleMouseMove)
+      if (bettingSection) {
+        bettingSection.removeEventListener('mouseenter', handleMouseEnter)
+        bettingSection.removeEventListener('mouseleave', handleMouseLeave as any)
+      }
+    }
+  }, [isDesktop])
+
   return (
     <div className="app-container bg-casino-dark flex flex-col">
       {/* Session Expired Modal - Blocks all UI when session expires */}
@@ -1066,17 +1207,32 @@ function App() {
         <LiveVideo />
       </div>
       
-      {/* Middle Section: Game Statistics/Roadmap (Mobile) */}
-      <div className={`roadmap-section-mobile bg-gradient-to-br from-casino-dark to-casino-darker`}>
-        {showGameSummary ? (
-          <GameSummary onClose={() => setGameSummary(false)} />
-        ) : (
-          <GameHistory variant="detailed" />
-        )}
+      {/* Middle Section: Game Statistics/Roadmap - Mobile mode only */}
+      {!isDesktop && (
+        <div className={`roadmap-section-mobile bg-gradient-to-br from-casino-dark to-casino-darker`}>
+          {showGameSummary ? (
+            <GameSummary onClose={() => setGameSummary(false)} />
+          ) : (
+            <GameHistory variant="detailed" />
+          )}
         </div>
+      )}
       
       {/* Bottom Section: Betting Interface */}
-      <div className="betting-section-wrapper overflow-hidden bg-gradient-to-br from-casino-dark to-casino-darker border-t-2 border-casino-gold/30">
+      <div 
+        ref={bettingSectionRef}
+        className={`betting-section-wrapper overflow-hidden bg-gradient-to-br from-casino-dark to-casino-darker border-t-2 border-casino-gold/30 relative ${isDesktop && !showBettingPanel ? 'betting-panel-hidden' : ''}`}
+      >
+        {/* Game History Overlay - PC mode only, displayed on top of betting panel */}
+        {isDesktop && showGameHistory && (
+          <div className="game-history-overlay-pc">
+            {showGameSummary ? (
+              <GameSummary onClose={() => setGameSummary(false)} />
+            ) : (
+              <GameHistory variant="detailed" />
+            )}
+          </div>
+        )}
         {/* Mobile: Single column betting */}
         <div className="betting-section-mobile flex flex-col">
           <BettingInterface />

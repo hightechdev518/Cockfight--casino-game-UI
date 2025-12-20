@@ -44,6 +44,16 @@ const FlyingChip: React.FC<FlyingChipProps> = ({
           src={getChipSVG(chipValue)}
           alt={`Flying chip ${chipValue}`}
           className="flying-chip-image"
+          onError={(e) => {
+            // Retry loading the image once on error
+            const img = e.currentTarget
+            const originalSrc = img.src
+            setTimeout(() => {
+              img.src = ''
+              img.src = originalSrc
+            }, 100)
+          }}
+          loading="eager"
         />
       </div>
     </div>

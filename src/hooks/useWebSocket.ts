@@ -741,7 +741,7 @@ export const useWebSocket = () => {
                 setAccountBalance(data.payload.balance)
               }
               break
-            case 'tableround':
+            case 'tableround': {
               // Update roundId from tableround message
               const tableroundUpdate: any = { ...data.payload }
               
@@ -930,6 +930,7 @@ export const useWebSocket = () => {
                 }))
               }
               break
+            }
             case 'video_url_update':
               if (data.payload?.video_url) {
                 window.dispatchEvent(new CustomEvent('video_url_update', {
@@ -1121,7 +1122,7 @@ export const useWebSocket = () => {
           
           // Handle user-specific events
           switch (data.act) {
-            case 'cancel':
+            case 'cancel': {
               // Round cancellation: {"act":"cancel","r_id":1267470,"tableid":"CF05","reason":"NO FIGHT"}
               if (import.meta.env.DEV) {
                 console.log('⚠️ Round cancelled:', {
@@ -1144,6 +1145,7 @@ export const useWebSocket = () => {
                 }
               }
               break
+            }
               
             case 'totalbet': {
               // Total bet + odds push (requested): {"act":"totalbet","r_id":"19565","tableid":"CF01","M":"158365.75","W":"160448.79","odds_M":"91.36","odds_W":"92.76"}
